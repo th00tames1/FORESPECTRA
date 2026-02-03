@@ -9,6 +9,8 @@ class Measurement {
     required this.deviceId,
     required this.scanTimeMs,
     required this.paramsJson,
+    this.materialName,
+    this.sampleName,
     this.latitude,
     this.longitude,
     this.modelId,
@@ -20,6 +22,8 @@ class Measurement {
   final String deviceId;
   final int scanTimeMs;
   final String paramsJson;
+  final String? materialName;
+  final String? sampleName;
   final double? latitude;
   final double? longitude;
   final String? modelId;

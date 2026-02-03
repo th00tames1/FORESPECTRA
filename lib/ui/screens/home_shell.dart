@@ -1,7 +1,9 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../services/app_state.dart';
 import '../theme/app_theme.dart';
 import 'acquire_screen.dart';
 import 'analyze_screen.dart';
@@ -17,10 +19,7 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  int _index = 0;
-
   final _screens = const [
-    ConnectScreen(),
     AcquireScreen(),
     AnalyzeScreen(),
     HistoryScreen(),
@@ -29,49 +28,57 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: AppTheme.backgroundGradient(),
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        extendBody: true,
-        body: _screens[_index],
-        bottomNavigationBar: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(30),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(30),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-                ),
-                child: NavigationBar(
-                  backgroundColor: Colors.transparent,
-                  indicatorColor: Colors.white.withValues(alpha: 0.12),
-                  height: 68,
-                  selectedIndex: _index,
-                  onDestinationSelected: (value) => setState(() => _index = value),
-                  destinations: const [
-                    NavigationDestination(icon: Icon(Icons.power_settings_new), label: 'Connect'),
-                    NavigationDestination(icon: Icon(Icons.auto_graph), label: 'Scan'),
-                    NavigationDestination(icon: Icon(Icons.insights), label: 'Results'),
-                    NavigationDestination(icon: Icon(Icons.history), label: 'History'),
-                    NavigationDestination(icon: Icon(Icons.tune), label: 'Config'),
-                  ],
+    return Consumer<AppState>(
+      builder: (context, state, _) {
+        final gradient = AppTheme.backgroundGradient(Theme.of(context).brightness);
+        final showConnect = !state.isConnected && (state.currentTab == 0 || state.currentTab == 1);
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: gradient,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            extendBody: false,
+            body: showConnect ? const ConnectScreen() : _screens[state.currentTab],
+            bottomNavigationBar: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(30),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                    ),
+                    child: NavigationBar(
+                      backgroundColor: Colors.transparent,
+                      indicatorColor: Colors.white.withValues(alpha: 0.12),
+                      height: 68,
+                      selectedIndex: state.currentTab,
+                      onDestinationSelected: (value) {
+                        if (!state.isConnected && value == 1) return;
+                        state.setTab(value);
+                      },
+                      destinations: const [
+                        NavigationDestination(icon: Icon(Icons.auto_graph), label: 'Scan'),
+                        NavigationDestination(icon: Icon(Icons.insights), label: 'Results'),
+                        NavigationDestination(icon: Icon(Icons.history), label: 'History'),
+                        NavigationDestination(icon: Icon(Icons.tune), label: 'Config'),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

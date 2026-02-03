@@ -14,10 +14,16 @@ class SpectralApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AppState()..initialize()),
       ],
-      child: MaterialApp(
-        title: 'OSU Spectral',
-        theme: AppTheme.lightTheme,
-        home: const SplashScreen(),
+      child: Consumer<AppState>(
+        builder: (context, state, _) {
+          return MaterialApp(
+            title: 'Forespectra',
+            theme: AppTheme.lightTheme,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: state.themeMode,
+            home: const SplashScreen(),
+          );
+        },
       ),
     );
   }

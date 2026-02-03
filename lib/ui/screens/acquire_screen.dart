@@ -2,169 +2,226 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/app_state.dart';
+import '../theme/app_theme.dart';
 import '../widgets/spectrum_chart.dart';
 
-class AcquireScreen extends StatelessWidget {
+class AcquireScreen extends StatefulWidget {
   const AcquireScreen({super.key});
+
+  @override
+  State<AcquireScreen> createState() => _AcquireScreenState();
+}
+
+class _AcquireScreenState extends State<AcquireScreen> {
+  final TextEditingController _materialController = TextEditingController();
+  final TextEditingController _sampleController = TextEditingController();
+  int _lastPromptedCapture = 0;
+  bool _initialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    final state = context.read<AppState>();
+    _materialController.text = state.materialName;
+    _sampleController.text = state.sampleName;
+    _initialized = true;
+  }
+
+  @override
+  void dispose() {
+    _materialController.dispose();
+    _sampleController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, state, _) {
-        final bottomInset = MediaQuery.of(context).padding.bottom + 110;
-        return SafeArea(
-          bottom: false,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(20, 20, 20, bottomInset),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                      Text('Scan', style: Theme.of(context).textTheme.headlineMedium),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Place the sample and tap Capture.',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 16),
-                      SpectrumChart(spectrum: state.latestSpectrum, title: 'Live Preview'),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: state.isConnected ? state.runSpectrum : null,
-                          child: const Text('Capture'),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        alignment: WrapAlignment.spaceBetween,
-                        spacing: 12,
-                        runSpacing: 8,
-                        children: [
-                          TextButton.icon(
-                            onPressed: state.isConnected
-                                ? () => _showAdvanced(context, state)
-                                : null,
-                            icon: const Icon(Icons.tune),
-                            label: const Text('Advanced settings'),
-                          ),
-                          OutlinedButton.icon(
-                            onPressed: state.latestSpectrum != null ? state.saveSession : null,
-                            icon: const Icon(Icons.save_alt),
-                            label: const Text('Save session'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
+        if (state.captureCount > _lastPromptedCapture && !state.isScanning) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _lastPromptedCapture = state.captureCount;
+            _showSaveSheet(context, state);
+          });
+        }
 
-  void _showAdvanced(BuildContext context, AppState state) {
-    final params = state.scanParams;
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).cardTheme.color,
-      builder: (_) {
-        final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-        return Padding(
-          padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottomInset),
+        final bottomInset = MediaQuery.of(context).padding.bottom + 140;
+        final minSide = MediaQuery.of(context).size.shortestSide;
+        final buttonSize = (minSide * 0.58).clamp(190.0, 240.0);
+        final isBusy = state.isScanning || state.isBackgrounding;
+        final canCapture = state.isConnected && state.hasBackground && !isBusy;
+        final statusColor = state.isConnected ? AppTheme.success : AppTheme.warning;
+
+        return SafeArea(
+          bottom: true,
           child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(20, 20, 20, bottomInset),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Advanced Scan', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 12),
-                _LabeledField(
-                  label: 'Scan time (ms)',
-                  child: Slider(
-                    value: params.scanTimeMs.toDouble(),
-                    min: 10,
-                    max: 224,
-                    divisions: 100,
-                    label: params.scanTimeMs.toString(),
-                    onChanged: (value) {
-                      state.updateScanTime(value.toInt());
-                    },
+                Text('Scan', style: Theme.of(context).textTheme.headlineMedium),
+                const SizedBox(height: 6),
+                Text(
+                  'Set a reference and press Scan.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _materialController,
+                        textInputAction: TextInputAction.next,
+                        decoration: const InputDecoration(
+                          labelText: 'Material name',
+                          hintText: 'e.g. Pine',
+                        ),
+                        onChanged: state.updateMaterialName,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _sampleController,
+                        decoration: const InputDecoration(
+                          labelText: 'Sample name',
+                          hintText: 'e.g. Sample A',
+                        ),
+                        onChanged: state.updateSampleName,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                if (!state.hasBackground)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded,
+                              color: Theme.of(context).colorScheme.primary),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Reference is required before scanning. Tap Set reference first.',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-                _DropdownField<int>(
-                  label: 'Resolution preset',
-                  value: params.zeroPadding,
-                  items: const [
-                    DropdownMenuItem(value: 1, child: Text('Fast')),
-                    DropdownMenuItem(value: 2, child: Text('Balanced')),
-                    DropdownMenuItem(value: 3, child: Text('High detail')),
-                  ],
-                  onChanged: (value) {
-                    if (value == null) return;
-                    state.updateZeroPadding(value);
-                  },
-                ),
-                _DropdownField<int>(
-                  label: 'Data points',
-                  value: params.commonWavNum,
-                  items: const [
-                    DropdownMenuItem(value: 1, child: Text('65')),
-                    DropdownMenuItem(value: 2, child: Text('129')),
-                    DropdownMenuItem(value: 3, child: Text('257')),
-                    DropdownMenuItem(value: 4, child: Text('513')),
-                    DropdownMenuItem(value: 5, child: Text('1024')),
-                    DropdownMenuItem(value: 6, child: Text('2048')),
-                    DropdownMenuItem(value: 7, child: Text('4096')),
-                  ],
-                  onChanged: (value) {
-                    if (value == null) return;
-                    state.updateCommonWavNum(value);
-                  },
-                ),
-                _DropdownField<int>(
-                  label: 'Optical gain',
-                  value: params.opticalGain,
-                  items: const [
-                    DropdownMenuItem(value: 0, child: Text('Automatic')),
-                    DropdownMenuItem(value: 1, child: Text('Calculated')),
-                    DropdownMenuItem(value: 2, child: Text('External')),
-                  ],
-                  onChanged: (value) {
-                    if (value == null) return;
-                    state.updateOpticalGain(value);
-                  },
-                ),
-                _DropdownField<int>(
-                  label: 'Smoothing',
-                  value: params.apodizationSel,
-                  items: const [
-                    DropdownMenuItem(value: 0, child: Text('None')),
-                    DropdownMenuItem(value: 1, child: Text('Soft')),
-                    DropdownMenuItem(value: 2, child: Text('Medium')),
-                    DropdownMenuItem(value: 3, child: Text('Strong')),
-                  ],
-                  onChanged: (value) {
-                    if (value == null) return;
-                    state.updateApodization(value);
-                  },
-                ),
-                const SizedBox(height: 8),
+                if (!state.hasBackground) const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: state.isConnected ? state.runBackground : null,
+                  child: OutlinedButton.icon(
+                    onPressed: state.isConnected && !isBusy ? state.runBackground : null,
                     icon: const Icon(Icons.layers),
-                    label: const Text('Set reference'),
+                    label: Text(state.hasBackground ? 'Reference set' : 'Set reference'),
                   ),
+                ),
+                const SizedBox(height: 18),
+                Center(
+                  child: GestureDetector(
+                    onTap: canCapture ? state.runSpectrum : null,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      height: buttonSize,
+                      width: buttonSize,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: canCapture ? AppTheme.accent : Colors.transparent,
+                        border: Border.all(
+                          color: canCapture
+                              ? AppTheme.accent
+                              : Theme.of(context).colorScheme.outline.withValues(alpha: 0.6),
+                          width: 2.5,
+                        ),
+                        boxShadow: canCapture
+                            ? [
+                                BoxShadow(
+                                  color: AppTheme.accent.withValues(alpha: 0.35),
+                                  blurRadius: 40,
+                                  spreadRadius: 6,
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.auto_graph,
+                                size: 52,
+                                color: canCapture ? Colors.white : AppTheme.muted,
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                state.isScanning ? 'SCANNING...' : 'SCAN',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                      letterSpacing: 1.2,
+                                      color: canCapture ? Colors.white : null,
+                                    ),
+                              ),
+                            ],
+                          ),
+                          if (isBusy)
+                            SizedBox(
+                              height: buttonSize - 12,
+                              width: buttonSize - 12,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 3,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  canCapture ? Colors.white : AppTheme.accent,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Center(
+                  child: Text(
+                    state.hasBackground
+                        ? 'Reference ready for spectrum capture.'
+                        : 'Set a reference before capturing a spectrum.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppTheme.muted,
+                        ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Icon(
+                          state.isConnected ? Icons.check_circle : Icons.info_outline,
+                          color: statusColor,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            state.statusMessage,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SpectrumChart(
+                  spectrum: state.latestSpectrum,
+                  title: 'Latest spectrum',
                 ),
               ],
             ),
@@ -173,60 +230,78 @@ class AcquireScreen extends StatelessWidget {
       },
     );
   }
-}
 
-class _LabeledField extends StatelessWidget {
-  const _LabeledField({required this.label, required this.child});
-
-  final String label;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: Theme.of(context).textTheme.labelLarge),
-          const SizedBox(height: 6),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _DropdownField<T> extends StatelessWidget {
-  const _DropdownField({
-    required this.label,
-    required this.value,
-    required this.items,
-    required this.onChanged,
-  });
-
-  final String label;
-  final T value;
-  final List<DropdownMenuItem<T>> items;
-  final ValueChanged<T?> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: Theme.of(context).textTheme.labelLarge),
-          const SizedBox(height: 6),
-          DropdownButtonFormField<T>(
-            key: ValueKey(value),
-            initialValue: value,
-            items: items,
-            onChanged: onChanged,
+  void _showSaveSheet(BuildContext context, AppState state) {
+    if (state.latestSpectrum == null) {
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Theme.of(context).cardTheme.color,
+      builder: (_) {
+        final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+        final safeBottom = MediaQuery.of(context).viewPadding.bottom;
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              12,
+              20,
+              20 + bottomInset + safeBottom + 16,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+              Text('Save scan?', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Text(
+                state.sampleName.trim().isEmpty
+                    ? 'No sample name'
+                    : 'Sample: ${state.sampleName}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              Text(
+                state.materialName.trim().isEmpty
+                    ? 'No material name'
+                    : 'Material: ${state.materialName}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        state.discardLatest();
+                        Navigator.pop(context);
+                      },
+                      child: const Text('Discard'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        await state.saveSession();
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                        }
+                      },
+                      child: const Text('Save'),
+                    ),
+                  ),
+                ],
+              ),
+              ],
+            ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

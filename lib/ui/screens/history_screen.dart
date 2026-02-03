@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../domain/measurement.dart';
 import '../../services/app_state.dart';
 import '../theme/app_theme.dart';
+import '../widgets/spectrum_chart.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -32,9 +33,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   item.deviceId.toLowerCase().contains(query);
             }).toList();
 
-            final bottomInset = MediaQuery.of(context).padding.bottom + 110;
+            final bottomInset = MediaQuery.of(context).padding.bottom + 140;
             return SafeArea(
-              bottom: false,
+              bottom: true,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
                 child: Column(
@@ -68,9 +69,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 return Card(
                                   child: ListTile(
                                     leading: const Icon(Icons.show_chart),
-                                    title: Text('Scan ${item.id.substring(0, 8)}'),
+                                    title: Text(
+                                      item.sampleName == null || item.sampleName!.isEmpty
+                                          ? 'Scan ${item.id.substring(0, 8)}'
+                                          : item.sampleName!,
+                                    ),
                                     subtitle: Text(
-                                      'Device ${item.deviceId} • ${item.timestamp}',
+                                      '${item.materialName ?? 'Unknown material'} • ${item.timestamp}',
                                     ),
                                     trailing: results == null
                                         ? const Text('—')
@@ -93,33 +98,76 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   void _showDetails(
       BuildContext context, Measurement item, Map<String, dynamic>? results) {
+    final spectraFuture = context.read<AppState>().dataStore.getSpectra(item.id);
     showModalBottomSheet(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Theme.of(context).cardTheme.color,
       builder: (_) {
         final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-        return Padding(
-          padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Scan ${item.id}', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                Text('Device: ${item.deviceId}'),
-                Text('Timestamp: ${item.timestamp}'),
-                Text('Scan time: ${item.scanTimeMs} ms'),
-                if (item.latitude != null && item.longitude != null)
-                  Text(
-                    'Location: ${item.latitude!.toStringAsFixed(5)}, ${item.longitude!.toStringAsFixed(5)}',
+        final safeBottom = MediaQuery.of(context).viewPadding.bottom;
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              20,
+              20,
+              20 + bottomInset + safeBottom + 16,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Scan ${item.id}', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  Text('Device: ${item.deviceId}'),
+                  if (item.materialName != null) Text('Material: ${item.materialName}'),
+                  if (item.sampleName != null) Text('Sample: ${item.sampleName}'),
+                  Text('Timestamp: ${item.timestamp}'),
+                  Text('Scan time: ${item.scanTimeMs} ms'),
+                  if (item.latitude != null && item.longitude != null)
+                    Text(
+                      'Location: ${item.latitude!.toStringAsFixed(5)}, ${item.longitude!.toStringAsFixed(5)}',
+                    ),
+                  const SizedBox(height: 12),
+                  if (results != null)
+                    Text('Result: ${results['value']} ${results['units']} (${results['label']})'),
+                  const SizedBox(height: 16),
+                  FutureBuilder(
+                    future: spectraFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      if (snapshot.hasError) {
+                        return Text(
+                          'Unable to load spectrum.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        );
+                      }
+                      final spectra = snapshot.data ?? [];
+                      if (spectra.isEmpty) {
+                        return Text(
+                          'No spectrum saved for this scan.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        );
+                      }
+                      return SpectrumChart(
+                        spectrum: spectra.first.toSpectrum(),
+                        title: 'Spectrum',
+                        maxPoints: 256,
+                      );
+                    },
                   ),
-                const SizedBox(height: 12),
-                if (results != null)
-                  Text('Result: ${results['value']} ${results['units']} (${results['label']})'),
-              ],
+                ],
+              ),
             ),
           ),
         );

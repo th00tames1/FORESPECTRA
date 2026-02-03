@@ -11,15 +11,15 @@ class SettingsScreen extends StatelessWidget {
     return Consumer<AppState>(
       builder: (context, state, _) {
         return SafeArea(
-          bottom: false,
+          bottom: true,
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 140),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Settings', style: Theme.of(context).textTheme.headlineMedium),
+                Text('Config', style: Theme.of(context).textTheme.headlineMedium),
                 const SizedBox(height: 6),
-                Text('Simple controls for everyday use.',
+                Text('Control device and scan settings.',
                     style: Theme.of(context).textTheme.bodyMedium),
                 const SizedBox(height: 16),
                 Card(
@@ -30,9 +30,57 @@ class SettingsScreen extends StatelessWidget {
                       children: [
                         Text('Device', style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Icon(
+                              state.isConnected ? Icons.check_circle : Icons.info_outline,
+                              color: state.isConnected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.outline,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              state.isConnected ? 'Connected' : 'Disconnected',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text('IP: ${state.currentIp}',
+                            style: Theme.of(context).textTheme.bodySmall),
                         Text(
-                          'Keep settings here unless instructed by support.',
+                          'Module ID: ${state.moduleId ?? '-'}',
                           style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: state.isConnected
+                                ? () => _confirmDisconnect(context, state)
+                                : null,
+                            icon: const Icon(Icons.link_off),
+                            label: const Text('Disconnect'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Appearance', style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 8),
+                        SwitchListTile(
+                          value: state.themeMode == ThemeMode.dark,
+                          onChanged: state.setThemeMode,
+                          title: const Text('Dark mode'),
+                          subtitle: const Text('Use the light theme by default.'),
                         ),
                       ],
                     ),
@@ -42,9 +90,83 @@ class SettingsScreen extends StatelessWidget {
                 Card(
                   child: ExpansionTile(
                     title: const Text('Advanced controls'),
-                    subtitle: const Text('For technicians only'),
+                    subtitle: const Text('Scan + device settings'),
                     childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                     children: [
+                      const SizedBox(height: 6),
+                      Text('Scan settings',
+                          style: Theme.of(context).textTheme.titleSmall),
+                      const SizedBox(height: 8),
+                      _sliderField(
+                        context: context,
+                        label: 'Scan time (ms)',
+                        value: state.scanParams.scanTimeMs.toDouble(),
+                        min: 10,
+                        max: 224,
+                        onChanged: (value) => state.updateScanTime(value.toInt()),
+                      ),
+                      _dropdownField<int>(
+                        context: context,
+                        label: 'Resolution preset',
+                        value: state.scanParams.zeroPadding,
+                        items: const [
+                          DropdownMenuItem(value: 1, child: Text('Fast')),
+                          DropdownMenuItem(value: 2, child: Text('Balanced')),
+                          DropdownMenuItem(value: 3, child: Text('High detail')),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+                          state.updateZeroPadding(value);
+                        },
+                      ),
+                      _dropdownField<int>(
+                        context: context,
+                        label: 'Data points',
+                        value: state.scanParams.commonWavNum,
+                        items: const [
+                          DropdownMenuItem(value: 1, child: Text('65')),
+                          DropdownMenuItem(value: 2, child: Text('129')),
+                          DropdownMenuItem(value: 3, child: Text('257')),
+                          DropdownMenuItem(value: 4, child: Text('513')),
+                          DropdownMenuItem(value: 5, child: Text('1024')),
+                          DropdownMenuItem(value: 6, child: Text('2048')),
+                          DropdownMenuItem(value: 7, child: Text('4096')),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+                          state.updateCommonWavNum(value);
+                        },
+                      ),
+                      _dropdownField<int>(
+                        context: context,
+                        label: 'Optical gain',
+                        value: state.scanParams.opticalGain,
+                        items: const [
+                          DropdownMenuItem(value: 0, child: Text('Automatic')),
+                          DropdownMenuItem(value: 1, child: Text('Calculated')),
+                          DropdownMenuItem(value: 2, child: Text('External')),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+                          state.updateOpticalGain(value);
+                        },
+                      ),
+                      _dropdownField<int>(
+                        context: context,
+                        label: 'Smoothing',
+                        value: state.scanParams.apodizationSel,
+                        items: const [
+                          DropdownMenuItem(value: 0, child: Text('None')),
+                          DropdownMenuItem(value: 1, child: Text('Soft')),
+                          DropdownMenuItem(value: 2, child: Text('Medium')),
+                          DropdownMenuItem(value: 3, child: Text('Strong')),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+                          state.updateApodization(value);
+                        },
+                      ),
+                      const SizedBox(height: 8),
                       SwitchListTile(
                         value: state.sendLengthPrefix,
                         onChanged: state.updateSendLengthPrefix,
@@ -122,6 +244,31 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _confirmDisconnect(BuildContext context, AppState state) async {
+    final shouldDisconnect = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Disconnect device?'),
+          content: const Text('You will need to initialize again to scan.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Disconnect'),
+            ),
+          ],
+        );
+      },
+    );
+    if (shouldDisconnect == true) {
+      await state.disconnect();
+    }
+  }
+
   Widget _numberField({
     required String label,
     required String initialValue,
@@ -134,6 +281,58 @@ class SettingsScreen extends StatelessWidget {
         keyboardType: TextInputType.number,
         decoration: InputDecoration(labelText: label),
         onChanged: onChanged,
+      ),
+    );
+  }
+
+  Widget _dropdownField<T>({
+    required BuildContext context,
+    required String label,
+    required T value,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 6),
+          DropdownButtonFormField<T>(
+            key: ValueKey(value),
+            initialValue: value,
+            items: items,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sliderField({
+    required BuildContext context,
+    required String label,
+    required double value,
+    required double min,
+    required double max,
+    required ValueChanged<double> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.labelLarge),
+          Slider(
+            value: value,
+            min: min,
+            max: max,
+            divisions: 100,
+            label: value.toStringAsFixed(0),
+            onChanged: onChanged,
+          ),
+        ],
       ),
     );
   }

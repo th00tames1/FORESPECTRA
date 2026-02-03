@@ -9,6 +9,8 @@ import '../domain/spectrum.dart';
 import 'si_nir_protocol.dart';
 
 class SiNirClient {
+  static const Duration _readTimeout = Duration(seconds: 20);
+
   Socket? _writeSocket;
   Socket? _readSocket;
   StreamQueue<List<int>>? _readQueue;
@@ -32,7 +34,14 @@ class SiNirClient {
   Future<void> disconnect() async {
     await _writeSocket?.close();
     await _readSocket?.close();
-    await _readQueue?.cancel();
+    final queue = _readQueue;
+    if (queue != null) {
+      try {
+        await queue.cancel();
+      } catch (_) {
+        // Ignore cancel errors when already closed.
+      }
+    }
     _readQueue = null;
     _readCache.clear();
     _writeSocket = null;
@@ -145,7 +154,7 @@ class SiNirClient {
       throw Exception('Read queue not initialized');
     }
     while (_readCache.length < length) {
-      final chunk = await queue.next;
+      final chunk = await queue.next.timeout(_readTimeout);
       _readCache.addAll(chunk);
     }
     final data = Uint8List.fromList(_readCache.sublist(0, length));

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -23,8 +24,16 @@ class AppState extends ChangeNotifier {
   bool isConnected = false;
   String statusMessage = 'Disconnected';
   String? moduleId;
-  String currentIp = '192.168.137.2';
-  bool sendLengthPrefix = true;
+  String currentIp = '10.92.71.8';
+  bool sendLengthPrefix = false;
+  bool hasBackground = false;
+  bool isBackgrounding = false;
+  bool isScanning = false;
+  int captureCount = 0;
+  int currentTab = 0;
+  ThemeMode themeMode = ThemeMode.dark;
+  String materialName = '';
+  String sampleName = '';
 
   int lampsCount = 2;
   int lampSelect = 0;
@@ -53,25 +62,26 @@ class AppState extends ChangeNotifier {
     try {
       client.sendLengthPrefix = sendLengthPrefix;
       final attempts = <String>{
-        currentIp,
+        currentIp.trim(),
         '192.168.144.2',
         '192.168.137.2',
-      }.toList();
+      }.where((ip) => ip.isNotEmpty).toList();
 
       Exception? lastError;
       for (final ip in attempts) {
         try {
           await client.disconnect();
-          await client.connect(ip, timeout: const Duration(seconds: 6));
-          final board = await client.checkBoard();
-          moduleId = await client.readModuleId();
+          await client.connect(ip, timeout: const Duration(seconds: 4));
           isConnected = true;
           currentIp = ip;
-          statusMessage = board == 1 ? 'Connected' : 'Connected (board status $board)';
-          if (moduleId != null) {
-            await dataStore.upsertDevice(id: moduleId!, name: 'Si-NIR', ip: currentIp);
-          }
+          hasBackground = false;
+          backgroundSpectrum = null;
+          latestSpectrum = null;
+          statusMessage = 'Connected (verifying...)';
+          setTab(0);
+          isConnecting = false;
           notifyListeners();
+          unawaited(_verifyDevice());
           return;
         } catch (error) {
           lastError = error is Exception ? error : Exception(error.toString());
@@ -81,8 +91,39 @@ class AppState extends ChangeNotifier {
     } catch (error) {
       statusMessage = 'Connection failed: $error';
       isConnected = false;
+      setTab(0);
     } finally {
-      isConnecting = false;
+      if (isConnecting) {
+        isConnecting = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> _verifyDevice() async {
+    const boardTimeout = Duration(seconds: 6);
+    const idTimeout = Duration(seconds: 6);
+    try {
+      final board = await client.checkBoard().timeout(boardTimeout);
+      statusMessage = board == 0 || board == 1
+          ? 'Connected'
+          : 'Connected (board status $board)';
+      notifyListeners();
+    } catch (_) {
+      statusMessage = 'Connected (verify timeout)';
+      notifyListeners();
+      return;
+    }
+
+    try {
+      final id = await client.readModuleId().timeout(idTimeout);
+      moduleId = id;
+      if (id.isNotEmpty) {
+        await dataStore.upsertDevice(id: id, name: 'Si-NIR', ip: currentIp);
+      }
+      notifyListeners();
+    } catch (_) {
+      statusMessage = 'Connected (ID unavailable)';
       notifyListeners();
     }
   }
@@ -90,32 +131,59 @@ class AppState extends ChangeNotifier {
   Future<void> disconnect() async {
     await client.disconnect();
     isConnected = false;
+    hasBackground = false;
+    isBackgrounding = false;
+    isScanning = false;
+    setTab(0);
     statusMessage = 'Disconnected';
     notifyListeners();
   }
 
   Future<void> runBackground() async {
-    if (!isConnected) return;
+    if (!isConnected || isBackgrounding || isScanning) return;
     statusMessage = 'Running background...';
+    isBackgrounding = true;
     notifyListeners();
     try {
-      final status = await client.runBackground(scanParams);
-      statusMessage = status == 0 ? 'Background captured' : 'Background error $status';
+      final status = await client
+          .runBackground(scanParams)
+          .timeout(const Duration(seconds: 12));
+      if (status == 0) {
+        hasBackground = true;
+        statusMessage = 'Reference captured';
+      } else {
+        hasBackground = false;
+        statusMessage = 'Background error $status';
+      }
     } catch (error) {
+      hasBackground = false;
       statusMessage = 'Background failed: $error';
+    } finally {
+      isBackgrounding = false;
     }
     notifyListeners();
   }
 
   Future<void> runSpectrum() async {
-    if (!isConnected) return;
+    if (!isConnected || isScanning || isBackgrounding) return;
+    if (!hasBackground) {
+      statusMessage = 'Background required. Tap Set reference.';
+      notifyListeners();
+      return;
+    }
     statusMessage = 'Scanning spectrum...';
+    isScanning = true;
     notifyListeners();
     try {
-      latestSpectrum = await client.runSpectrum(scanParams);
-      statusMessage = 'Spectrum ready';
+      latestSpectrum = await client
+          .runSpectrum(scanParams)
+          .timeout(const Duration(seconds: 20));
+      statusMessage = 'Ready to Scan';
+      captureCount += 1;
     } catch (error) {
       statusMessage = 'Spectrum failed: $error';
+    } finally {
+      isScanning = false;
     }
     notifyListeners();
   }
@@ -169,6 +237,8 @@ class AppState extends ChangeNotifier {
         'opticalGain': scanParams.opticalGain,
         'apodizationSel': scanParams.apodizationSel,
       }),
+      materialName: materialName.trim().isEmpty ? null : materialName.trim(),
+      sampleName: sampleName.trim().isEmpty ? null : sampleName.trim(),
       latitude: position?.latitude,
       longitude: position?.longitude,
       modelId: currentModel?.id,
@@ -191,6 +261,13 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void discardLatest() {
+    latestSpectrum = null;
+    lastResult = null;
+    statusMessage = 'Scan discarded';
+    notifyListeners();
+  }
+
   Future<void> requestStoragePermission() async {
     await Permission.storage.request();
   }
@@ -198,6 +275,27 @@ class AppState extends ChangeNotifier {
   void updateSendLengthPrefix(bool value) {
     sendLengthPrefix = value;
     client.sendLengthPrefix = value;
+    notifyListeners();
+  }
+
+  void updateMaterialName(String value) {
+    materialName = value;
+    notifyListeners();
+  }
+
+  void updateSampleName(String value) {
+    sampleName = value;
+    notifyListeners();
+  }
+
+  void setTab(int value) {
+    if (currentTab == value) return;
+    currentTab = value;
+    notifyListeners();
+  }
+
+  void setThemeMode(bool isDark) {
+    themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
     notifyListeners();
   }
 

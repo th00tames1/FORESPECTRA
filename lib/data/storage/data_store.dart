@@ -15,7 +15,7 @@ class DataStore {
     final path = p.join(dir.path, 'spectra.db');
     _db = await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE devices(
@@ -40,6 +40,8 @@ class DataStore {
             timestamp INTEGER,
             scan_time_ms INTEGER,
             params_json TEXT,
+            material_name TEXT,
+            sample_name TEXT,
             lat REAL,
             lon REAL,
             model_id TEXT,
@@ -56,6 +58,12 @@ class DataStore {
             y_blob BLOB
           );
         ''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('ALTER TABLE measurements ADD COLUMN material_name TEXT');
+          await db.execute('ALTER TABLE measurements ADD COLUMN sample_name TEXT');
+        }
       },
     );
   }
@@ -111,6 +119,8 @@ class DataStore {
         'timestamp': measurement.timestamp.millisecondsSinceEpoch,
         'scan_time_ms': measurement.scanTimeMs,
         'params_json': measurement.paramsJson,
+        'material_name': measurement.materialName,
+        'sample_name': measurement.sampleName,
         'lat': measurement.latitude,
         'lon': measurement.longitude,
         'model_id': measurement.modelId,
@@ -173,6 +183,8 @@ class DataStore {
       timestamp: DateTime.fromMillisecondsSinceEpoch(row['timestamp'] as int),
       scanTimeMs: row['scan_time_ms'] as int,
       paramsJson: row['params_json'] as String,
+      materialName: row['material_name'] as String?,
+      sampleName: row['sample_name'] as String?,
       latitude: row['lat'] as double?,
       longitude: row['lon'] as double?,
       modelId: row['model_id'] as String?,

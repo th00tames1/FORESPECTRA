@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
 import 'home_shell.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -35,24 +34,24 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A1A),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'OSU SPECTRAL',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              'FORESPECTRA',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     letterSpacing: 2,
                     fontWeight: FontWeight.w700,
-                    color: AppTheme.ink,
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Oregon State University',
+              'OSU Advanced Forestry Systems Lab',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.muted,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
             ),
           ],

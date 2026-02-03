@@ -11,9 +11,9 @@ class AnalyzeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, state, _) {
-        final bottomInset = MediaQuery.of(context).padding.bottom + 110;
+        final bottomInset = MediaQuery.of(context).padding.bottom + 140;
         return SafeArea(
-          bottom: false,
+          bottom: true,
           child: SingleChildScrollView(
             padding: EdgeInsets.fromLTRB(20, 20, 20, bottomInset),
             child: Column(
