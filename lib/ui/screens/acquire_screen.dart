@@ -73,9 +73,14 @@ class _AcquireScreenState extends State<AcquireScreen> {
                       child: TextField(
                         controller: _materialController,
                         textInputAction: TextInputAction.next,
+                        enabled: state.hasBackground,
                         decoration: const InputDecoration(
                           labelText: 'Material name',
                           hintText: 'e.g. Pine',
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                         ),
                         onChanged: state.updateMaterialName,
                       ),
@@ -84,9 +89,14 @@ class _AcquireScreenState extends State<AcquireScreen> {
                     Expanded(
                       child: TextField(
                         controller: _sampleController,
+                        enabled: state.hasBackground,
                         decoration: const InputDecoration(
                           labelText: 'Sample name',
                           hintText: 'e.g. Sample A',
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                         ),
                         onChanged: state.updateSampleName,
                       ),
@@ -251,7 +261,7 @@ class _AcquireScreenState extends State<AcquireScreen> {
               20,
               12,
               20,
-              20 + bottomInset + safeBottom + 16,
+              20 + bottomInset + safeBottom + 32,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,

@@ -31,7 +31,7 @@ class _HomeShellState extends State<HomeShell> {
     return Consumer<AppState>(
       builder: (context, state, _) {
         final gradient = AppTheme.backgroundGradient(Theme.of(context).brightness);
-        final showConnect = !state.isConnected && (state.currentTab == 0 || state.currentTab == 1);
+        final showConnect = state.showConnectScreen && state.currentTab == 0;
         return Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -62,14 +62,28 @@ class _HomeShellState extends State<HomeShell> {
                       height: 68,
                       selectedIndex: state.currentTab,
                       onDestinationSelected: (value) {
-                        if (!state.isConnected && value == 1) return;
+                        if (!state.isConnected && (value == 0 || value == 1)) return;
                         state.setTab(value);
                       },
-                      destinations: const [
-                        NavigationDestination(icon: Icon(Icons.auto_graph), label: 'Scan'),
-                        NavigationDestination(icon: Icon(Icons.insights), label: 'Results'),
-                        NavigationDestination(icon: Icon(Icons.history), label: 'History'),
-                        NavigationDestination(icon: Icon(Icons.tune), label: 'Config'),
+                      destinations: [
+                        NavigationDestination(
+                          icon: const Icon(Icons.auto_graph),
+                          label: 'Scan',
+                          enabled: state.isConnected,
+                        ),
+                        NavigationDestination(
+                          icon: const Icon(Icons.insights),
+                          label: 'Results',
+                          enabled: state.isConnected,
+                        ),
+                        const NavigationDestination(
+                          icon: Icon(Icons.history),
+                          label: 'History',
+                        ),
+                        const NavigationDestination(
+                          icon: Icon(Icons.tune),
+                          label: 'Config',
+                        ),
                       ],
                     ),
                   ),

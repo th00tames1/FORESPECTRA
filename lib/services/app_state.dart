@@ -32,6 +32,8 @@ class AppState extends ChangeNotifier {
   int captureCount = 0;
   int currentTab = 0;
   ThemeMode themeMode = ThemeMode.dark;
+  bool showConnectScreen = true;
+  Timer? _connectDelayTimer;
   String materialName = '';
   String sampleName = '';
 
@@ -58,6 +60,8 @@ class AppState extends ChangeNotifier {
   Future<void> connect() async {
     isConnecting = true;
     statusMessage = 'Connecting...';
+    _connectDelayTimer?.cancel();
+    showConnectScreen = true;
     notifyListeners();
     try {
       client.sendLengthPrefix = sendLengthPrefix;
@@ -79,6 +83,7 @@ class AppState extends ChangeNotifier {
           latestSpectrum = null;
           statusMessage = 'Connected (verifying...)';
           setTab(0);
+          _startConnectDelay();
           isConnecting = false;
           notifyListeners();
           unawaited(_verifyDevice());
@@ -91,6 +96,7 @@ class AppState extends ChangeNotifier {
     } catch (error) {
       statusMessage = 'Connection failed: $error';
       isConnected = false;
+      showConnectScreen = true;
       setTab(0);
     } finally {
       if (isConnecting) {
@@ -98,6 +104,14 @@ class AppState extends ChangeNotifier {
         notifyListeners();
       }
     }
+  }
+
+  void _startConnectDelay() {
+    _connectDelayTimer?.cancel();
+    _connectDelayTimer = Timer(const Duration(seconds: 3), () {
+      showConnectScreen = false;
+      notifyListeners();
+    });
   }
 
   Future<void> _verifyDevice() async {
@@ -129,11 +143,13 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
+    _connectDelayTimer?.cancel();
     await client.disconnect();
     isConnected = false;
     hasBackground = false;
     isBackgrounding = false;
     isScanning = false;
+    showConnectScreen = true;
     setTab(0);
     statusMessage = 'Disconnected';
     notifyListeners();

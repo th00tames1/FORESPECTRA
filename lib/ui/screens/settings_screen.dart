@@ -80,7 +80,7 @@ class SettingsScreen extends StatelessWidget {
                           value: state.themeMode == ThemeMode.dark,
                           onChanged: state.setThemeMode,
                           title: const Text('Dark mode'),
-                          subtitle: const Text('Use the light theme by default.'),
+                          subtitle: const Text('Switch to light theme when off.'),
                         ),
                       ],
                     ),

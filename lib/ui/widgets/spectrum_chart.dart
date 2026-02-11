@@ -15,6 +15,7 @@ class SpectrumChart extends StatefulWidget {
     this.maxPoints = 512,
     this.minY = 0,
     this.maxY = 1.1,
+    this.simplified = false,
   });
 
   final Spectrum? spectrum;
@@ -22,6 +23,7 @@ class SpectrumChart extends StatefulWidget {
   final int maxPoints;
   final double minY;
   final double maxY;
+  final bool simplified;
 
   @override
   State<SpectrumChart> createState() => _SpectrumChartState();
@@ -51,23 +53,28 @@ class _SpectrumChartState extends State<SpectrumChart> {
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(8, 16, 8, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 12),
             SizedBox(
-              height: 340,
+              height: 280,
               child: FutureBuilder<List<FlSpot>>(
                 future: _pointsFuture,
                 builder: (context, snapshot) {
                   final points = snapshot.data ?? [const FlSpot(0, 0)];
+                  final enableTouch = !widget.simplified;
                   return LineChart(
                     LineChartData(
                       minY: widget.minY,
                       maxY: widget.maxY,
-                      gridData: FlGridData(show: true, drawVerticalLine: false),
+                      gridData: FlGridData(
+                        show: true,
+                        drawVerticalLine: false,
+                        horizontalInterval: 0.2,
+                      ),
                       borderData: FlBorderData(show: false),
                       titlesData: FlTitlesData(
                         topTitles: const AxisTitles(
@@ -79,16 +86,19 @@ class _SpectrumChartState extends State<SpectrumChart> {
                         leftTitles: AxisTitles(
                           sideTitles: SideTitles(
                             showTitles: true,
-                            reservedSize: 34,
+                            reservedSize: 26,
+                            interval: 0.2,
+                            minIncluded: true,
+                            maxIncluded: true,
                             getTitlesWidget: (value, meta) {
                               return SideTitleWidget(
                                 axisSide: meta.axisSide,
                                 child: Text(
                                   value.toStringAsFixed(1),
                                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                        color: AppTheme.muted,
-                                        fontSize: 9,
-                                      ),
+                                    color: AppTheme.muted,
+                                    fontSize: 8,
+                                  ),
                                 ),
                               );
                             },
@@ -97,16 +107,16 @@ class _SpectrumChartState extends State<SpectrumChart> {
                         bottomTitles: AxisTitles(
                           sideTitles: SideTitles(
                             showTitles: true,
-                            reservedSize: 22,
+                            reservedSize: 18,
                             getTitlesWidget: (value, meta) {
                               return SideTitleWidget(
                                 axisSide: meta.axisSide,
                                 child: Text(
                                   value.toStringAsFixed(0),
                                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                        color: AppTheme.muted,
-                                        fontSize: 9,
-                                      ),
+                                    color: AppTheme.muted,
+                                    fontSize: 8,
+                                  ),
                                 ),
                               );
                             },
@@ -114,7 +124,8 @@ class _SpectrumChartState extends State<SpectrumChart> {
                         ),
                       ),
                       lineTouchData: LineTouchData(
-                        enabled: true,
+                        enabled: enableTouch,
+                        handleBuiltInTouches: enableTouch,
                         touchTooltipData: LineTouchTooltipData(
                           getTooltipColor: (_) => Theme.of(context).cardColor,
                           getTooltipItems: (spots) {
@@ -132,12 +143,12 @@ class _SpectrumChartState extends State<SpectrumChart> {
                       lineBarsData: [
                         LineChartBarData(
                           spots: points,
-                          isCurved: true,
-                          barWidth: 2.2,
+                          isCurved: !widget.simplified,
+                          barWidth: widget.simplified ? 1.6 : 2.2,
                           dotData: FlDotData(show: false),
                           color: AppTheme.accent,
                           belowBarData: BarAreaData(
-                            show: true,
+                            show: !widget.simplified,
                             gradient: LinearGradient(
                               colors: [
                                 AppTheme.accent.withValues(alpha: 0.22),

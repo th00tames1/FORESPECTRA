@@ -93,6 +93,21 @@ class AppTheme {
         labelStyle: textTheme.labelLarge?.copyWith(color: _lightInk),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
       ),
+      navigationBarTheme: NavigationBarThemeData(
+        labelTextStyle: MaterialStateProperty.resolveWith((states) {
+          final base = textTheme.labelSmall;
+          if (states.contains(MaterialState.disabled)) {
+            return base?.copyWith(color: _lightMuted);
+          }
+          return base?.copyWith(color: _lightInk);
+        }),
+        iconTheme: MaterialStateProperty.resolveWith((states) {
+          if (states.contains(MaterialState.disabled)) {
+            return const IconThemeData(color: _lightMuted);
+          }
+          return const IconThemeData(color: _lightInk);
+        }),
+      ),
     );
   }
 
@@ -166,6 +181,21 @@ class AppTheme {
         selectedColor: _osuOrange.withValues(alpha: 0.2),
         labelStyle: textTheme.labelLarge?.copyWith(color: _ink),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        labelTextStyle: MaterialStateProperty.resolveWith((states) {
+          final base = textTheme.labelSmall;
+          if (states.contains(MaterialState.disabled)) {
+            return base?.copyWith(color: _muted);
+          }
+          return base?.copyWith(color: _ink);
+        }),
+        iconTheme: MaterialStateProperty.resolveWith((states) {
+          if (states.contains(MaterialState.disabled)) {
+            return const IconThemeData(color: _muted);
+          }
+          return const IconThemeData(color: _ink);
+        }),
       ),
     );
   }

@@ -143,7 +143,7 @@ class ConnectScreen extends StatelessWidget {
               20,
               12,
               20,
-              20 + bottomInset + safeBottom + 16,
+              20 + bottomInset + safeBottom + 32,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
