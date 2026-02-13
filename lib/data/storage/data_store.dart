@@ -93,6 +93,26 @@ class DataStore {
     );
   }
 
+  Future<List<String>> listRecentDeviceIps({int limit = 12}) async {
+    final rows = await _database.query(
+      'devices',
+      columns: ['ip'],
+      where: 'ip IS NOT NULL AND ip != ?',
+      whereArgs: [''],
+      orderBy: 'last_seen DESC',
+      limit: limit,
+    );
+
+    final ips = <String>[];
+    for (final row in rows) {
+      final ip = (row['ip'] as String?)?.trim();
+      if (ip != null && ip.isNotEmpty && !ips.contains(ip)) {
+        ips.add(ip);
+      }
+    }
+    return ips;
+  }
+
   Future<void> saveModel({
     required String id,
     required String name,

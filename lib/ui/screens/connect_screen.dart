@@ -4,15 +4,34 @@ import 'package:provider/provider.dart';
 import '../../services/app_state.dart';
 import '../theme/app_theme.dart';
 
-class ConnectScreen extends StatelessWidget {
+class ConnectScreen extends StatefulWidget {
   const ConnectScreen({super.key});
+
+  @override
+  State<ConnectScreen> createState() => _ConnectScreenState();
+}
+
+class _ConnectScreenState extends State<ConnectScreen> {
+  int _lastPromptSignal = 0;
+  bool _isSensorSheetOpen = false;
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, state, _) {
+        if (state.sensorPickerPromptSignal != _lastPromptSignal) {
+          _lastPromptSignal = state.sensorPickerPromptSignal;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || _isSensorSheetOpen) {
+              return;
+            }
+            _openSensorPickerSheet(context);
+          });
+        }
+
         final isConnected = state.isConnected;
         final isConnecting = state.isConnecting;
+        final isDiscovering = state.isDiscovering;
         final title = isConnected
             ? 'ONLINE'
             : isConnecting
@@ -114,6 +133,35 @@ class ConnectScreen extends StatelessWidget {
                           ],
                         ),
                       ),
+                      Align(
+                        alignment: Alignment.bottomCenter,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 560),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: isConnecting || isDiscovering
+                                      ? null
+                                      : () => state.requestSensorPicker(startDiscovery: true),
+                                  icon: isDiscovering
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        )
+                                      : const Icon(Icons.radar),
+                                  label: Text(
+                                    isDiscovering ? 'Searching for devices...' : 'Find devices',
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -123,6 +171,132 @@ class ConnectScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _openSensorPickerSheet(BuildContext context) async {
+    _isSensorSheetOpen = true;
+    try {
+      await showModalBottomSheet(
+        context: context,
+        showDragHandle: true,
+        useSafeArea: true,
+        isScrollControlled: true,
+        backgroundColor: Theme.of(context).cardTheme.color,
+        builder: (_) {
+          return Consumer<AppState>(
+            builder: (context, state, __) {
+              final sensors = state.discoveredSensors;
+              final isBusy = state.isDiscovering;
+              return Padding(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  8,
+                  20,
+                  20 + MediaQuery.of(context).viewPadding.bottom,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Select Device',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      isBusy
+                          ? 'Searching hotspot network...'
+                          : 'Choose a saved or discovered sensor IP.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppTheme.muted,
+                          ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (sensors.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                        ),
+                        child: Text(
+                          isBusy ? 'Searching...' : 'No devices found yet.',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: AppTheme.muted),
+                        ),
+                      )
+                    else
+                      Container(
+                        constraints: BoxConstraints(
+                          maxHeight: MediaQuery.of(context).size.height * 0.45,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                          color: Colors.white.withValues(alpha: 0.02),
+                        ),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: sensors.length,
+                          separatorBuilder: (_, __) => Divider(
+                            height: 1,
+                            color: Colors.white.withValues(alpha: 0.08),
+                          ),
+                          itemBuilder: (context, index) {
+                            final sensor = sensors[index];
+                            final subtitleText = sensor.moduleId != null
+                                ? 'Module ${sensor.moduleId}'
+                                : sensor.fromHistory
+                                    ? 'Saved address'
+                                    : 'Verified sensor';
+                            return ListTile(
+                              dense: true,
+                              leading: Icon(
+                                sensor.verified ? Icons.sensors_outlined : Icons.history,
+                                color: sensor.verified
+                                    ? Theme.of(context).colorScheme.primary
+                                    : AppTheme.muted,
+                              ),
+                              title: Text(sensor.ip),
+                              subtitle: Text(subtitleText),
+                              onTap: state.isConnecting
+                                  ? null
+                                  : () async {
+                                      Navigator.pop(context);
+                                      await state.connectToSensor(sensor);
+                                    },
+                            );
+                          },
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: state.isDiscovering ? null : state.discoverSensors,
+                        icon: state.isDiscovering
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.refresh),
+                        label: Text(state.isDiscovering ? 'Searching...' : 'Search again'),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      _isSensorSheetOpen = false;
+    }
   }
 
   void _showDeviceSheet(BuildContext context, AppState state) {
@@ -160,7 +334,7 @@ class ConnectScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                'Tip: Hotspot 10.92.71.x • USB 192.168.137.2 • Direct 192.168.144.2',
+                'Tip: Hotspot 10.92.71.x or 10.13.199.x • USB 192.168.137.2 • Direct 192.168.144.2',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AppTheme.muted,
                     ),
@@ -178,7 +352,7 @@ class ConnectScreen extends StatelessWidget {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () {
-                        state.currentIp = controller.text.trim();
+                        state.setCurrentIp(controller.text.trim());
                         Navigator.pop(context);
                       },
                       child: const Text('Save'),
