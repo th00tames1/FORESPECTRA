@@ -49,7 +49,7 @@ class _AcquireScreenState extends State<AcquireScreen> {
         final bottomInset = MediaQuery.of(context).padding.bottom + 140;
         final minSide = MediaQuery.of(context).size.shortestSide;
         final buttonSize = (minSide * 0.58).clamp(190.0, 240.0);
-        final isBusy = state.isScanning || state.isBackgrounding;
+        final isBusy = state.isScanning || state.isBackgrounding || state.isVerifyingConnection;
         final canCapture = state.isConnected && state.hasBackground && !isBusy;
         final statusColor = state.isConnected ? AppTheme.success : AppTheme.warning;
 

@@ -32,13 +32,22 @@ class _ConnectScreenState extends State<ConnectScreen> {
         final isConnected = state.isConnected;
         final isConnecting = state.isConnecting;
         final isDiscovering = state.isDiscovering;
+        final isOnline = isConnected && !isConnecting;
+        final ringColor = isOnline
+            ? AppTheme.success
+            : Colors.white.withValues(alpha: 0.25);
+        final fillColor = isOnline
+            ? AppTheme.success.withValues(alpha: 0.15)
+            : Colors.transparent;
         final title = isConnected
             ? 'ONLINE'
             : isConnecting
                 ? 'CONNECTING...'
                 : 'INITIALIZE';
         final subtitle = isConnected
-            ? 'Ready to scan'
+            ? state.isVerifyingConnection
+                ? 'Connected. Verifying sensor...'
+                : 'Ready to scan'
             : isConnecting
                 ? 'Looking for your device'
                 : 'Tap to link with the spectrometer';
@@ -95,20 +104,29 @@ class _ConnectScreenState extends State<ConnectScreen> {
                                 width: buttonSize,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: Colors.transparent,
+                                  color: fillColor,
                                   border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.25),
+                                    color: ringColor,
                                     width: 2.5,
                                   ),
+                                  boxShadow: isOnline
+                                      ? [
+                                          BoxShadow(
+                                            color: AppTheme.success.withValues(alpha: 0.35),
+                                            blurRadius: 36,
+                                            spreadRadius: 2,
+                                          ),
+                                        ]
+                                      : null,
                                 ),
                                 child: Center(
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Icon(
-                                        Icons.power_outlined,
+                                        isOnline ? Icons.check_circle_rounded : Icons.power_outlined,
                                         size: 48,
-                                        color: AppTheme.muted,
+                                        color: isOnline ? AppTheme.success : AppTheme.muted,
                                       ),
                                       const SizedBox(height: 12),
                                       Text(
@@ -116,7 +134,10 @@ class _ConnectScreenState extends State<ConnectScreen> {
                                         style: Theme.of(context)
                                             .textTheme
                                             .titleMedium
-                                            ?.copyWith(letterSpacing: 1.2),
+                                            ?.copyWith(
+                                              letterSpacing: 1.2,
+                                              color: isOnline ? AppTheme.success : null,
+                                            ),
                                       ),
                                     ],
                                   ),
@@ -129,6 +150,59 @@ class _ConnectScreenState extends State<ConnectScreen> {
                               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                     color: AppTheme.muted,
                                   ),
+                            ),
+                            const SizedBox(height: 10),
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 220),
+                              child: isOnline
+                                  ? Container(
+                                      key: const ValueKey('online-pill'),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 10,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(999),
+                                        color: AppTheme.success.withValues(alpha: 0.14),
+                                        border: Border.all(
+                                          color: AppTheme.success.withValues(alpha: 0.55),
+                                        ),
+                                      ),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.check_circle,
+                                                size: 16,
+                                                color: AppTheme.success,
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                'Sensor Connected',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .labelLarge
+                                                    ?.copyWith(color: AppTheme.success),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            state.moduleId == null
+                                                ? state.currentIp
+                                                : '${state.currentIp} | Module ${state.moduleId}',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(color: AppTheme.muted),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  : const SizedBox.shrink(),
                             ),
                           ],
                         ),
@@ -251,7 +325,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
                                 ? 'Module ${sensor.moduleId}'
                                 : sensor.fromHistory
                                     ? 'Saved address'
-                                    : 'Verified sensor';
+                                    : 'Reachable host';
                             return ListTile(
                               dense: true,
                               leading: Icon(

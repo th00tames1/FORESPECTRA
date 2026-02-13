@@ -9,7 +9,7 @@ import '../domain/spectrum.dart';
 import 'si_nir_protocol.dart';
 
 class SiNirClient {
-  static const Duration _readTimeout = Duration(seconds: 20);
+  static const Duration _defaultReadTimeout = Duration(seconds: 20);
 
   Socket? _writeSocket;
   Socket? _readSocket;
@@ -48,31 +48,49 @@ class SiNirClient {
     _readSocket = null;
   }
 
-  Future<int> checkBoard() => _enqueue(() async {
-        final payload = await _sendOperation(Operation.checkBoard);
+  Future<int> checkBoard({Duration? timeout}) => _enqueue(() async {
+        final payload = await _sendOperation(
+          Operation.checkBoard,
+          readTimeout: timeout,
+        );
         return payload.isEmpty ? -1 : payload[0];
       });
 
-  Future<String> readModuleId() => _enqueue(() async {
-        final payload = await _sendOperation(Operation.readModuleId);
+  Future<String> readModuleId({Duration? timeout}) => _enqueue(() async {
+        final payload = await _sendOperation(
+          Operation.readModuleId,
+          readTimeout: timeout,
+        );
         final idBytes = payload.takeWhile((value) => value != 0).toList();
         return String.fromCharCodes(idBytes);
       });
 
-  Future<Spectrum> runPsd(ScanParams params) => _enqueue(() async {
-        final payload = await _sendOperation(Operation.runPsd, params: params);
+  Future<Spectrum> runPsd(ScanParams params, {Duration? timeout}) => _enqueue(() async {
+        final payload = await _sendOperation(
+          Operation.runPsd,
+          params: params,
+          readTimeout: timeout,
+        );
         final result = parseSpectrumPayload(payload);
         return Spectrum(x: result.wavenumber, y: result.values);
       });
 
-  Future<Spectrum> runSpectrum(ScanParams params) => _enqueue(() async {
-        final payload = await _sendOperation(Operation.runSpectrum, params: params);
+  Future<Spectrum> runSpectrum(ScanParams params, {Duration? timeout}) => _enqueue(() async {
+        final payload = await _sendOperation(
+          Operation.runSpectrum,
+          params: params,
+          readTimeout: timeout,
+        );
         final result = parseSpectrumPayload(payload);
         return Spectrum(x: result.wavenumber, y: result.values);
       });
 
-  Future<int> runBackground(ScanParams params) => _enqueue(() async {
-        final payload = await _sendOperation(Operation.runBackground, params: params);
+  Future<int> runBackground(ScanParams params, {Duration? timeout}) => _enqueue(() async {
+        final payload = await _sendOperation(
+          Operation.runBackground,
+          params: params,
+          readTimeout: timeout,
+        );
         return payload.isEmpty ? -1 : payload[0];
       });
 
@@ -122,7 +140,11 @@ class SiNirClient {
     return completer.future;
   }
 
-  Future<Uint8List> _sendOperation(int operation, {ScanParams? params}) async {
+  Future<Uint8List> _sendOperation(
+    int operation, {
+    ScanParams? params,
+    Duration? readTimeout,
+  }) async {
     if (!isConnected) {
       throw Exception('Not connected');
     }
@@ -136,25 +158,25 @@ class SiNirClient {
     }
     writeSocket.add(bytes);
     await writeSocket.flush();
-    return _readPacket();
+    return _readPacket(readTimeout: readTimeout ?? _defaultReadTimeout);
   }
 
-  Future<Uint8List> _readPacket() async {
-    final lengthBytes = await _readExact(4);
+  Future<Uint8List> _readPacket({required Duration readTimeout}) async {
+    final lengthBytes = await _readExact(4, readTimeout: readTimeout);
     final length = ByteData.sublistView(lengthBytes).getUint32(0, Endian.little);
     if (length == 0) {
       return Uint8List(0);
     }
-    return _readExact(length);
+    return _readExact(length, readTimeout: readTimeout);
   }
 
-  Future<Uint8List> _readExact(int length) async {
+  Future<Uint8List> _readExact(int length, {required Duration readTimeout}) async {
     final queue = _readQueue;
     if (queue == null) {
       throw Exception('Read queue not initialized');
     }
     while (_readCache.length < length) {
-      final chunk = await queue.next.timeout(_readTimeout);
+      final chunk = await queue.next.timeout(readTimeout);
       _readCache.addAll(chunk);
     }
     final data = Uint8List.fromList(_readCache.sublist(0, length));

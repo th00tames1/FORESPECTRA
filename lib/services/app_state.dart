@@ -58,6 +58,7 @@ class AppState extends ChangeNotifier {
 
   bool isConnecting = false;
   bool isConnected = false;
+  bool isVerifyingConnection = false;
   String statusMessage = 'Disconnected';
   String? moduleId;
   String currentIp = '10.92.71.8';
@@ -76,6 +77,7 @@ class AppState extends ChangeNotifier {
   List<DiscoveredSensor> discoveredSensors = const [];
   List<String> _recentIps = const [];
   int sensorPickerPromptSignal = 0;
+  int _discoveryRunId = 0;
 
   int lampsCount = 2;
   int lampSelect = 0;
@@ -98,7 +100,8 @@ class AppState extends ChangeNotifier {
     await _loadKnownDevices();
   }
 
-  Future<void> connect() async {
+  Future<void> connect({String? preferredIp, bool fallbackToKnown = true}) async {
+    _cancelDiscovery(notify: false);
     isConnecting = true;
     statusMessage = 'Connecting...';
     _connectDelayTimer?.cancel();
@@ -106,7 +109,10 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     try {
       client.sendLengthPrefix = sendLengthPrefix;
-      final attempts = await _connectionAttempts();
+      final attempts = await _connectionAttempts(
+        preferredIp: preferredIp,
+        fallbackToKnown: fallbackToKnown,
+      );
 
       Exception? lastError;
       for (final ip in attempts) {
@@ -118,7 +124,9 @@ class AppState extends ChangeNotifier {
           hasBackground = false;
           backgroundSpectrum = null;
           latestSpectrum = null;
+          _cancelDiscovery(notify: false);
           statusMessage = 'Connected (verifying...)';
+          isVerifyingConnection = true;
           setTab(0);
           _startConnectDelay();
           _registerDiscoveredSensor(
@@ -163,45 +171,54 @@ class AppState extends ChangeNotifier {
   Future<void> _verifyDevice() async {
     const boardTimeout = Duration(seconds: 6);
     const idTimeout = Duration(seconds: 6);
+    isVerifyingConnection = true;
+    notifyListeners();
     try {
-      final board = await client.checkBoard().timeout(boardTimeout);
-      statusMessage = board == 0 || board == 1
-          ? 'Connected'
-          : 'Connected (board status $board)';
-      notifyListeners();
-    } catch (_) {
-      statusMessage = 'Connected (verify timeout)';
-      notifyListeners();
-      return;
-    }
-
-    try {
-      final id = (await client.readModuleId().timeout(idTimeout)).trim();
-      moduleId = id.isEmpty ? null : id;
-      if (moduleId != null) {
-        await dataStore.upsertDevice(id: moduleId!, name: 'Si-NIR', ip: currentIp);
-        await _refreshKnownIps();
-        _registerDiscoveredSensor(
-          DiscoveredSensor(
-            ip: currentIp,
-            moduleId: moduleId,
-            verified: true,
-            fromHistory: true,
-          ),
-          notify: false,
-        );
+      try {
+        final board = await client.checkBoard(timeout: boardTimeout);
+        statusMessage = board == 1
+            ? 'Connected'
+            : board == 0
+                ? 'Connected (board unavailable)'
+                : 'Connected (board status $board)';
+        notifyListeners();
+      } catch (_) {
+        statusMessage = 'Connected (verify timeout)';
+        notifyListeners();
+        return;
       }
-      notifyListeners();
-    } catch (_) {
-      statusMessage = 'Connected (ID unavailable)';
+
+      try {
+        final id = (await client.readModuleId(timeout: idTimeout)).trim();
+        moduleId = id.isEmpty ? null : id;
+        if (moduleId != null) {
+          await dataStore.upsertDevice(id: moduleId!, name: 'Si-NIR', ip: currentIp);
+          await _refreshKnownIps();
+          _registerDiscoveredSensor(
+            DiscoveredSensor(
+              ip: currentIp,
+              moduleId: moduleId,
+              verified: true,
+              fromHistory: true,
+            ),
+            notify: false,
+          );
+        }
+      } catch (_) {
+        statusMessage = 'Connected (ID unavailable)';
+      }
+    } finally {
+      isVerifyingConnection = false;
       notifyListeners();
     }
   }
 
   Future<void> disconnect() async {
     _connectDelayTimer?.cancel();
+    _cancelDiscovery(notify: false);
     await client.disconnect();
     isConnected = false;
+    isVerifyingConnection = false;
     hasBackground = false;
     isBackgrounding = false;
     isScanning = false;
@@ -225,14 +242,17 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> connectToSensor(DiscoveredSensor sensor) async {
+    _cancelDiscovery(notify: false);
     setCurrentIp(sensor.ip);
-    await connect();
+    await connect(preferredIp: sensor.ip, fallbackToKnown: false);
   }
 
   Future<void> discoverSensors() async {
-    if (isDiscovering || isConnecting) {
+    if (isDiscovering || isConnecting || isConnected) {
       return;
     }
+
+    final scanId = ++_discoveryRunId;
 
     isDiscovering = true;
     statusMessage = 'Searching for hotspot devices...';
@@ -251,6 +271,9 @@ class AppState extends ChangeNotifier {
 
       var cursor = 0;
       String? nextTarget() {
+        if (scanId != _discoveryRunId || isConnected || isConnecting) {
+          return null;
+        }
         if (cursor >= targets.length) {
           return null;
         }
@@ -267,6 +290,9 @@ class AppState extends ChangeNotifier {
           }
 
           final probed = await _probeSensor(ip);
+          if (scanId != _discoveryRunId || isConnected || isConnecting) {
+            return;
+          }
           if (probed == null) {
             continue;
           }
@@ -299,20 +325,29 @@ class AppState extends ChangeNotifier {
     } catch (error) {
       statusMessage = 'Device search failed: $error';
     } finally {
-      isDiscovering = false;
-      notifyListeners();
+      if (scanId == _discoveryRunId) {
+        isDiscovering = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<void> runBackground() async {
     if (!isConnected || isBackgrounding || isScanning) return;
+    if (isVerifyingConnection) {
+      statusMessage = 'Please wait for connection verification to finish.';
+      notifyListeners();
+      return;
+    }
+    _cancelDiscovery(notify: false);
     statusMessage = 'Running background...';
     isBackgrounding = true;
     notifyListeners();
     try {
-      final status = await client
-          .runBackground(scanParams)
-          .timeout(const Duration(seconds: 12));
+      final status = await client.runBackground(
+        scanParams,
+        timeout: const Duration(seconds: 20),
+      );
       if (status == 0) {
         hasBackground = true;
         statusMessage = 'Reference captured';
@@ -340,9 +375,10 @@ class AppState extends ChangeNotifier {
     isScanning = true;
     notifyListeners();
     try {
-      latestSpectrum = await client
-          .runSpectrum(scanParams)
-          .timeout(const Duration(seconds: 20));
+      latestSpectrum = await client.runSpectrum(
+        scanParams,
+        timeout: const Duration(seconds: 20),
+      );
       statusMessage = 'Ready to Scan';
       captureCount += 1;
     } catch (error) {
@@ -358,7 +394,10 @@ class AppState extends ChangeNotifier {
     statusMessage = 'Scanning PSD...';
     notifyListeners();
     try {
-      latestSpectrum = await client.runPsd(scanParams);
+      latestSpectrum = await client.runPsd(
+        scanParams,
+        timeout: const Duration(seconds: 20),
+      );
       statusMessage = 'PSD ready';
     } catch (error) {
       statusMessage = 'PSD failed: $error';
@@ -553,13 +592,16 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<List<String>> _connectionAttempts() async {
+  Future<List<String>> _connectionAttempts({
+    String? preferredIp,
+    bool fallbackToKnown = true,
+  }) async {
     await _refreshKnownIps();
-    return _orderedUnique([
-      currentIp,
-      ..._recentIps,
-      ..._defaultKnownIps,
-    ]);
+    final preferred = preferredIp?.trim() ?? currentIp;
+    if (!fallbackToKnown) {
+      return _orderedUnique([preferred]);
+    }
+    return _orderedUnique([preferred, ..._recentIps, ..._defaultKnownIps]);
   }
 
   Future<List<String>> _discoveryTargets() async {
@@ -603,38 +645,10 @@ class AppState extends ChangeNotifier {
     final probe = SiNirClient()..sendLengthPrefix = sendLengthPrefix;
     try {
       await probe.connect(ip, timeout: const Duration(milliseconds: 280));
-
-      int? boardStatus;
-      try {
-        boardStatus = await probe.checkBoard().timeout(
-              const Duration(milliseconds: 1200),
-            );
-      } catch (_) {
-        boardStatus = null;
-      }
-
-      String? discoveredId;
-      try {
-        final rawId = await probe.readModuleId().timeout(
-              const Duration(milliseconds: 1200),
-            );
-        final trimmed = rawId.trim();
-        if (trimmed.isNotEmpty) {
-          discoveredId = trimmed;
-        }
-      } catch (_) {
-        discoveredId = null;
-      }
-
-      final verified = boardStatus == 0 || boardStatus == 1 || discoveredId != null;
-      if (!verified) {
-        return null;
-      }
-
       return DiscoveredSensor(
         ip: ip,
-        moduleId: discoveredId,
-        verified: true,
+        moduleId: null,
+        verified: false,
         fromHistory: false,
       );
     } catch (_) {
@@ -731,6 +745,17 @@ class AppState extends ChangeNotifier {
       Future.microtask(() {
         unawaited(discoverSensors());
       });
+    }
+  }
+
+  void _cancelDiscovery({bool notify = true}) {
+    _discoveryRunId += 1;
+    if (!isDiscovering) {
+      return;
+    }
+    isDiscovering = false;
+    if (notify) {
+      notifyListeners();
     }
   }
 }
