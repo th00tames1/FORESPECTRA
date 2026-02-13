@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../services/app_state.dart';
 import 'analyze_screen.dart';
 import '../theme/app_theme.dart';
-import '../widgets/spectrum_chart.dart';
 
 class AcquireScreen extends StatefulWidget {
   const AcquireScreen({super.key});
@@ -71,43 +70,6 @@ class _AcquireScreenState extends State<AcquireScreen> {
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _materialController,
-                        textInputAction: TextInputAction.next,
-                        enabled: state.hasBackground,
-                        decoration: const InputDecoration(
-                          labelText: 'Material name',
-                          hintText: 'e.g. Pine',
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                        ),
-                        onChanged: state.updateMaterialName,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: _sampleController,
-                        enabled: state.hasBackground,
-                        decoration: const InputDecoration(
-                          labelText: 'Sample name',
-                          hintText: 'e.g. Sample A',
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                        ),
-                        onChanged: state.updateSampleName,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
                 if (!state.hasBackground)
                   Card(
                     child: Padding(
@@ -212,6 +174,43 @@ class _AcquireScreenState extends State<AcquireScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _materialController,
+                        textInputAction: TextInputAction.next,
+                        enabled: state.hasBackground,
+                        decoration: const InputDecoration(
+                          labelText: 'Material name',
+                          hintText: 'e.g. Pine',
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                        ),
+                        onChanged: state.updateMaterialName,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _sampleController,
+                        enabled: state.hasBackground,
+                        decoration: const InputDecoration(
+                          labelText: 'Sample name',
+                          hintText: 'e.g. Sample A',
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                        ),
+                        onChanged: state.updateSampleName,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -231,11 +230,6 @@ class _AcquireScreenState extends State<AcquireScreen> {
                       ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                SpectrumChart(
-                  spectrum: state.latestSpectrum,
-                  title: '',
                 ),
               ],
             ),

@@ -29,7 +29,11 @@ class AnalyzeScreen extends StatelessWidget {
                 Text('Turn your scan into a simple readout.',
                     style: Theme.of(context).textTheme.bodyMedium),
                 const SizedBox(height: 16),
-                SpectrumChart(spectrum: state.latestSpectrum, title: 'Spectrum Preview'),
+                SpectrumChart(
+                  spectrum: state.latestSpectrum,
+                  title: 'Spectrum Preview',
+                  axisUnit: state.spectrumAxisUnit,
+                ),
                 if (fromScanFlow) ...[
                   const SizedBox(height: 16),
                   Row(
@@ -50,7 +54,24 @@ class AnalyzeScreen extends StatelessWidget {
                           onPressed: state.latestSpectrum == null
                               ? null
                               : () async {
+                                  final shouldSave = await _showSaveConfirmDialog(
+                                    context,
+                                    state,
+                                  );
+                                  if (!shouldSave) {
+                                    return;
+                                  }
                                   await state.saveSession();
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context)
+                                      ..hideCurrentSnackBar()
+                                      ..showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Saved'),
+                                          duration: Duration(milliseconds: 1500),
+                                        ),
+                                      );
+                                  }
                                   state.setTab(1);
                                   if (context.mounted) {
                                     Navigator.pop(context);
@@ -68,5 +89,47 @@ class AnalyzeScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<bool> _showSaveConfirmDialog(BuildContext context, AppState state) async {
+    final materialController = TextEditingController(text: state.materialName);
+    final sampleController = TextEditingController(text: state.sampleName);
+    final shouldSave = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Confirm Save'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: materialController,
+                decoration: const InputDecoration(labelText: 'Material name'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: sampleController,
+                decoration: const InputDecoration(labelText: 'Sample name'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+    state.updateMaterialName(materialController.text.trim());
+    state.updateSampleName(sampleController.text.trim());
+    materialController.dispose();
+    sampleController.dispose();
+    return shouldSave == true;
   }
 }

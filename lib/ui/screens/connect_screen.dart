@@ -143,57 +143,62 @@ class _ConnectScreenState extends State<ConnectScreen> {
                                   ),
                             ),
                             const SizedBox(height: 10),
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 220),
-                              child: isOnline
-                                  ? Container(
-                                      key: const ValueKey('online-pill'),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 14,
-                                        vertical: 10,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(999),
-                                        color: AppTheme.success.withValues(alpha: 0.14),
-                                        border: Border.all(
-                                          color: AppTheme.success.withValues(alpha: 0.55),
-                                        ),
-                                      ),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Row(
+                            SizedBox(
+                              height: 72,
+                              child: Center(
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 220),
+                                  child: isOnline
+                                      ? Container(
+                                          key: const ValueKey('online-pill'),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 14,
+                                            vertical: 10,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(999),
+                                            color: AppTheme.success.withValues(alpha: 0.14),
+                                            border: Border.all(
+                                              color: AppTheme.success.withValues(alpha: 0.55),
+                                            ),
+                                          ),
+                                          child: Column(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              Icon(
-                                                Icons.check_circle,
-                                                size: 16,
-                                                color: AppTheme.success,
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    Icons.check_circle,
+                                                    size: 16,
+                                                    color: AppTheme.success,
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  Text(
+                                                    'Sensor Connected',
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .labelLarge
+                                                        ?.copyWith(color: AppTheme.success),
+                                                  ),
+                                                ],
                                               ),
-                                              const SizedBox(width: 6),
+                                              const SizedBox(height: 4),
                                               Text(
-                                                'Sensor Connected',
+                                                state.moduleId == null
+                                                    ? state.currentIp
+                                                    : '${state.currentIp} | Module ${state.moduleId}',
                                                 style: Theme.of(context)
                                                     .textTheme
-                                                    .labelLarge
-                                                    ?.copyWith(color: AppTheme.success),
+                                                    .bodySmall
+                                                    ?.copyWith(color: AppTheme.muted),
                                               ),
                                             ],
                                           ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            state.moduleId == null
-                                                ? state.currentIp
-                                                : '${state.currentIp} | Module ${state.moduleId}',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodySmall
-                                                ?.copyWith(color: AppTheme.muted),
-                                          ),
-                                        ],
-                                      ),
-                                    )
-                                  : const SizedBox.shrink(),
+                                        )
+                                      : const SizedBox.shrink(),
+                                ),
+                              ),
                             ),
                           ],
                         ),

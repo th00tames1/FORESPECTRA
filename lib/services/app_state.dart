@@ -69,6 +69,7 @@ class AppState extends ChangeNotifier {
   int captureCount = 0;
   int currentTab = 0;
   ThemeMode themeMode = ThemeMode.dark;
+  String spectrumAxisUnit = 'nm';
   bool showConnectScreen = true;
   Timer? _connectDelayTimer;
   String materialName = '';
@@ -514,6 +515,11 @@ class AppState extends ChangeNotifier {
 
   void setThemeMode(ThemeMode mode) {
     themeMode = mode;
+    notifyListeners();
+  }
+
+  void updateSpectrumAxisUnit(String unit) {
+    spectrumAxisUnit = unit;
     notifyListeners();
   }
 

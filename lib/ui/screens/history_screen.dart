@@ -157,6 +157,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       return SpectrumChart(
                         spectrum: spectra.first.toSpectrum(),
                         title: 'Spectrum',
+                        axisUnit: context.read<AppState>().spectrumAxisUnit,
                         maxPoints: 128,
                         simplified: true,
                       );

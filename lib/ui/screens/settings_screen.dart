@@ -102,6 +102,20 @@ class SettingsScreen extends StatelessWidget {
                           state.updateCommonWavNum(value);
                         },
                       ),
+                      _dropdownField<String>(
+                        context: context,
+                        label: 'Spectrum plot axis',
+                        value: state.spectrumAxisUnit,
+                        items: const [
+                          DropdownMenuItem(value: 'DN', child: Text('DN')),
+                          DropdownMenuItem(value: 'cm^-1', child: Text('cm^-1')),
+                          DropdownMenuItem(value: 'nm', child: Text('nm')),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+                          state.updateSpectrumAxisUnit(value);
+                        },
+                      ),
                       _dropdownField<int>(
                         context: context,
                         label: 'Optical gain',
