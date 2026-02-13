@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/app_state.dart';
+import 'analyze_screen.dart';
 import '../theme/app_theme.dart';
 import '../widgets/spectrum_chart.dart';
 
@@ -16,6 +17,7 @@ class _AcquireScreenState extends State<AcquireScreen> {
   final TextEditingController _materialController = TextEditingController();
   final TextEditingController _sampleController = TextEditingController();
   int _lastPromptedCapture = 0;
+  bool _resultScreenOpen = false;
   bool _initialized = false;
 
   @override
@@ -39,10 +41,12 @@ class _AcquireScreenState extends State<AcquireScreen> {
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, state, _) {
-        if (state.captureCount > _lastPromptedCapture && !state.isScanning) {
+        if (state.captureCount > _lastPromptedCapture &&
+            !state.isScanning &&
+            !_resultScreenOpen) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _lastPromptedCapture = state.captureCount;
-            _showSaveSheet(context, state);
+            _openResultsScreen(context);
           });
         }
 
@@ -231,7 +235,7 @@ class _AcquireScreenState extends State<AcquireScreen> {
                 const SizedBox(height: 16),
                 SpectrumChart(
                   spectrum: state.latestSpectrum,
-                  title: 'Latest spectrum',
+                  title: '',
                 ),
               ],
             ),
@@ -241,77 +245,19 @@ class _AcquireScreenState extends State<AcquireScreen> {
     );
   }
 
-  void _showSaveSheet(BuildContext context, AppState state) {
-    if (state.latestSpectrum == null) {
+  Future<void> _openResultsScreen(BuildContext context) async {
+    if (!mounted) {
       return;
     }
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Theme.of(context).cardTheme.color,
-      builder: (_) {
-        final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-        final safeBottom = MediaQuery.of(context).viewPadding.bottom;
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              12,
-              20,
-              20 + bottomInset + safeBottom + 32,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-              Text('Save scan?', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
-              Text(
-                state.sampleName.trim().isEmpty
-                    ? 'No sample name'
-                    : 'Sample: ${state.sampleName}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              Text(
-                state.materialName.trim().isEmpty
-                    ? 'No material name'
-                    : 'Material: ${state.materialName}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {
-                        state.discardLatest();
-                        Navigator.pop(context);
-                      },
-                      child: const Text('Discard'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        await state.saveSession();
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                        }
-                      },
-                      child: const Text('Save'),
-                    ),
-                  ),
-                ],
-              ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+    _resultScreenOpen = true;
+    try {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const AnalyzeScreen(fromScanFlow: true),
+        ),
+      );
+    } finally {
+      _resultScreenOpen = false;
+    }
   }
 }

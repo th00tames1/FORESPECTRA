@@ -28,59 +28,24 @@ class SettingsScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Device', style: Theme.of(context).textTheme.titleMedium),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Icon(
-                              state.isConnected ? Icons.check_circle : Icons.info_outline,
-                              color: state.isConnected
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).colorScheme.outline,
+                        _dropdownField<ThemeMode>(
+                          context: context,
+                          label: 'Theme',
+                          value: state.themeMode,
+                          items: const [
+                            DropdownMenuItem(
+                              value: ThemeMode.light,
+                              child: Text('Light mode'),
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              state.isConnected ? 'Connected' : 'Disconnected',
-                              style: Theme.of(context).textTheme.bodyMedium,
+                            DropdownMenuItem(
+                              value: ThemeMode.dark,
+                              child: Text('Dark mode'),
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 12),
-                        Text('IP: ${state.currentIp}',
-                            style: Theme.of(context).textTheme.bodySmall),
-                        Text(
-                          'Module ID: ${state.moduleId ?? '-'}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: state.isConnected
-                                ? () => _confirmDisconnect(context, state)
-                                : null,
-                            icon: const Icon(Icons.link_off),
-                            label: const Text('Disconnect'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Appearance', style: Theme.of(context).textTheme.titleMedium),
-                        const SizedBox(height: 8),
-                        SwitchListTile(
-                          value: state.themeMode == ThemeMode.dark,
-                          onChanged: state.setThemeMode,
-                          title: const Text('Dark mode'),
-                          subtitle: const Text('Switch to light theme when off.'),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            state.setThemeMode(value);
+                          },
                         ),
                       ],
                     ),
@@ -242,31 +207,6 @@ class SettingsScreen extends StatelessWidget {
         );
       },
     );
-  }
-
-  Future<void> _confirmDisconnect(BuildContext context, AppState state) async {
-    final shouldDisconnect = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Disconnect device?'),
-          content: const Text('You will need to initialize again to scan.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Disconnect'),
-            ),
-          ],
-        );
-      },
-    );
-    if (shouldDisconnect == true) {
-      await state.disconnect();
-    }
   }
 
   Widget _numberField({

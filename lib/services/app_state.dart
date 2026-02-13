@@ -78,6 +78,7 @@ class AppState extends ChangeNotifier {
   List<String> _recentIps = const [];
   int sensorPickerPromptSignal = 0;
   int _discoveryRunId = 0;
+  Completer<void>? _activeDiscoveryCompletion;
 
   int lampsCount = 2;
   int lampSelect = 0;
@@ -100,7 +101,7 @@ class AppState extends ChangeNotifier {
     await _loadKnownDevices();
   }
 
-  Future<void> connect({String? preferredIp, bool fallbackToKnown = true}) async {
+  Future<void> connect({String? preferredIp, bool fallbackToKnown = false}) async {
     _cancelDiscovery(notify: false);
     isConnecting = true;
     statusMessage = 'Connecting...';
@@ -108,6 +109,7 @@ class AppState extends ChangeNotifier {
     showConnectScreen = true;
     notifyListeners();
     try {
+      await _waitForDiscoveryDrain();
       client.sendLengthPrefix = sendLengthPrefix;
       final attempts = await _connectionAttempts(
         preferredIp: preferredIp,
@@ -176,11 +178,9 @@ class AppState extends ChangeNotifier {
     try {
       try {
         final board = await client.checkBoard(timeout: boardTimeout);
-        statusMessage = board == 1
+        statusMessage = board == 0 || board == 1
             ? 'Connected'
-            : board == 0
-                ? 'Connected (board unavailable)'
-                : 'Connected (board status $board)';
+            : 'Connected (board status $board)';
         notifyListeners();
       } catch (_) {
         statusMessage = 'Connected (verify timeout)';
@@ -253,6 +253,8 @@ class AppState extends ChangeNotifier {
     }
 
     final scanId = ++_discoveryRunId;
+    final completion = Completer<void>();
+    _activeDiscoveryCompletion = completion;
 
     isDiscovering = true;
     statusMessage = 'Searching for hotspot devices...';
@@ -325,6 +327,12 @@ class AppState extends ChangeNotifier {
     } catch (error) {
       statusMessage = 'Device search failed: $error';
     } finally {
+      if (!completion.isCompleted) {
+        completion.complete();
+      }
+      if (identical(_activeDiscoveryCompletion, completion)) {
+        _activeDiscoveryCompletion = null;
+      }
       if (scanId == _discoveryRunId) {
         isDiscovering = false;
         notifyListeners();
@@ -340,6 +348,7 @@ class AppState extends ChangeNotifier {
       return;
     }
     _cancelDiscovery(notify: false);
+    await _waitForDiscoveryDrain();
     statusMessage = 'Running background...';
     isBackgrounding = true;
     notifyListeners();
@@ -357,7 +366,12 @@ class AppState extends ChangeNotifier {
       }
     } catch (error) {
       hasBackground = false;
-      statusMessage = 'Background failed: $error';
+      if (error is TimeoutException) {
+        statusMessage =
+            'Background timeout. Check sensor power adapter/cable and try again.';
+      } else {
+        statusMessage = 'Background failed: $error';
+      }
     } finally {
       isBackgrounding = false;
     }
@@ -498,8 +512,8 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setThemeMode(bool isDark) {
-    themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+  void setThemeMode(ThemeMode mode) {
+    themeMode = mode;
     notifyListeners();
   }
 
@@ -756,6 +770,18 @@ class AppState extends ChangeNotifier {
     isDiscovering = false;
     if (notify) {
       notifyListeners();
+    }
+  }
+
+  Future<void> _waitForDiscoveryDrain() async {
+    final completion = _activeDiscoveryCompletion;
+    if (completion == null) {
+      return;
+    }
+    try {
+      await completion.future.timeout(const Duration(milliseconds: 900));
+    } catch (_) {
+      // Best-effort wait only.
     }
   }
 }

@@ -8,11 +8,12 @@ class AppTheme {
   static const _ink = Color(0xFFFFFFFF);
   static const _muted = Color(0xFF9E9E9E);
   static const _warning = Color(0xFFFFC107);
-  static const _lightSurface = Color(0xFFF8F5F2);
+  static const _lightSurface = Color(0xFFF7F5F5);
+  static const _lightNavSurface = Color(0xFFE9E5E4);
   static const _lightCard = Color(0xFFFFFFFF);
-  static const _lightInk = Color(0xFF1C1C1C);
-  static const _lightMuted = Color(0xFF6E6E6E);
-  static const _lightOutline = Color(0xFFE0D7D2);
+  static const _lightInk = Color(0xFF423E3C);
+  static const _lightMuted = Color(0xFF5F5956);
+  static const _lightOutline = Color(0xFFD1C8C4);
 
   static ThemeData get lightTheme {
     final base = ThemeData.light();
@@ -94,6 +95,8 @@ class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
       ),
       navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: _lightNavSurface,
+        indicatorColor: _osuOrange.withValues(alpha: 0.16),
         labelTextStyle: MaterialStateProperty.resolveWith((states) {
           final base = textTheme.labelSmall;
           if (states.contains(MaterialState.disabled)) {
@@ -209,9 +212,9 @@ class AppTheme {
       ];
     }
     return [
-      const Color(0xFFF5F2EF),
-      const Color(0xFFF7F2EE),
-      const Color(0xFFFAF6F3),
+      const Color(0xFFF7F5F5),
+      const Color(0xFFF4F0EF),
+      const Color(0xFFEFE9E6),
     ];
   }
 

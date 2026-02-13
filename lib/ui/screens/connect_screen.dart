@@ -69,18 +69,9 @@ class _ConnectScreenState extends State<ConnectScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Forespectra',
-                                  style: Theme.of(context).textTheme.headlineMedium,
-                                ),
-                                IconButton(
-                                  onPressed: () => _showDeviceSheet(context, state),
-                                  icon: const Icon(Icons.settings_suggest),
-                                ),
-                              ],
+                            Text(
+                              'Forespectra',
+                              style: Theme.of(context).textTheme.headlineMedium,
                             ),
                             Text(
                               'OSU Advanced Forestry Systems Lab',
@@ -248,6 +239,8 @@ class _ConnectScreenState extends State<ConnectScreen> {
   }
 
   Future<void> _openSensorPickerSheet(BuildContext context) async {
+    final manualController =
+        TextEditingController(text: context.read<AppState>().currentIp);
     _isSensorSheetOpen = true;
     try {
       await showModalBottomSheet(
@@ -284,6 +277,26 @@ class _ConnectScreenState extends State<ConnectScreen> {
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: AppTheme.muted,
                           ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: manualController,
+                      decoration: const InputDecoration(
+                        labelText: 'Add device address',
+                        hintText: '10.13.199.8',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          final ip = manualController.text.trim();
+                          state.setCurrentIp(ip);
+                        },
+                        icon: const Icon(Icons.add_link),
+                        label: const Text('Add address'),
+                      ),
                     ),
                     const SizedBox(height: 12),
                     if (sensors.isEmpty)
@@ -369,76 +382,8 @@ class _ConnectScreenState extends State<ConnectScreen> {
         },
       );
     } finally {
+      manualController.dispose();
       _isSensorSheetOpen = false;
     }
-  }
-
-  void _showDeviceSheet(BuildContext context, AppState state) {
-    final controller = TextEditingController(text: state.currentIp);
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Theme.of(context).cardTheme.color,
-      builder: (_) {
-        final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-        final safeBottom = MediaQuery.of(context).viewPadding.bottom;
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              12,
-              20,
-              20 + bottomInset + safeBottom + 32,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-              Text('Device Address', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: controller,
-                decoration: const InputDecoration(
-                  hintText: '10.92.71.8',
-                  labelText: 'IP address',
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Tip: Hotspot 10.92.71.x or 10.13.199.x • USB 192.168.137.2 • Direct 192.168.144.2',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppTheme.muted,
-                    ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        state.setCurrentIp(controller.text.trim());
-                        Navigator.pop(context);
-                      },
-                      child: const Text('Save'),
-                    ),
-                  ),
-                ],
-              ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 }

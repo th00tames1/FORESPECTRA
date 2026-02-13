@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -57,8 +55,10 @@ class _SpectrumChartState extends State<SpectrumChart> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 12),
+            if (widget.title.trim().isNotEmpty) ...[
+              Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+            ],
             SizedBox(
               height: 280,
               child: FutureBuilder<List<FlSpot>>(
