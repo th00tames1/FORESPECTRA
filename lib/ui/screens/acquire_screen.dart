@@ -39,7 +39,8 @@ class _AcquireScreenState extends State<AcquireScreen> {
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, state, _) {
-        final bottomInset = MediaQuery.of(context).padding.bottom + 140;
+        final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+        final keyboardOpen = keyboardInset > 0;
         final minSide = MediaQuery.of(context).size.shortestSide;
         final buttonSize = (minSide * 0.58).clamp(190.0, 240.0);
         final isBusy = state.isScanning || state.isBackgrounding || state.isVerifyingConnection;
@@ -49,38 +50,41 @@ class _AcquireScreenState extends State<AcquireScreen> {
 
         return SafeArea(
           bottom: true,
-          child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(20, 20, 20, bottomInset),
-            child: Column(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+            child: AnimatedPadding(
+              duration: const Duration(milliseconds: 160),
+              padding: EdgeInsets.only(bottom: keyboardInset),
+              child: keyboardOpen
+                  ? SingleChildScrollView(child: _buildContent(context, state, buttonSize, canScanTap, canCapture, isBusy, statusColor, false))
+                  : _buildContent(context, state, buttonSize, canScanTap, canCapture, isBusy, statusColor, true),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildContent(
+    BuildContext context,
+    AppState state,
+    double buttonSize,
+    bool canScanTap,
+    bool canCapture,
+    bool isBusy,
+    Color statusColor,
+    bool includeSpacer,
+  ) {
+    return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Scan', style: Theme.of(context).textTheme.headlineMedium),
                 const SizedBox(height: 6),
                 Text(
-                  'Set a reference and press Scan.',
+                  'Press Scan to capture spectrum.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 16),
-                if (!state.hasBackground)
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          Icon(Icons.warning_amber_rounded,
-                              color: Theme.of(context).colorScheme.primary),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Reference is required before scanning. Tap Set reference first.',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                if (!state.hasBackground) const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
@@ -154,17 +158,17 @@ class _AcquireScreenState extends State<AcquireScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Center(
-                  child: Text(
-                    state.hasBackground
-                        ? 'Reference ready for spectrum capture.'
-                        : 'Set a reference before capturing a spectrum.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppTheme.muted,
-                        ),
+                if (state.hasBackground) ...[
+                  Center(
+                    child: Text(
+                      'Reference ready for spectrum capture.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppTheme.muted,
+                          ),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
+                  const SizedBox(height: 16),
+                ],
                 Row(
                   children: [
                     Expanded(
@@ -222,12 +226,9 @@ class _AcquireScreenState extends State<AcquireScreen> {
                     ),
                   ),
                 ),
+                if (includeSpacer) const Spacer(),
               ],
-            ),
-          ),
-        );
-      },
-    );
+            );
   }
 
   Future<void> _openResultsScreen(BuildContext context) async {
@@ -262,14 +263,16 @@ class _AcquireScreenState extends State<AcquireScreen> {
   Future<void> _showReferenceRequiredSheet(BuildContext context, AppState state) async {
     await showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       showDragHandle: true,
       useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Theme.of(context).cardTheme.color,
-      builder: (_) {
-        final safeBottom = MediaQuery.of(context).viewPadding.bottom;
+      builder: (sheetContext) {
+        final safeBottom = MediaQuery.of(sheetContext).viewPadding.bottom;
+        final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
         return Padding(
-          padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + safeBottom),
+          padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + safeBottom + bottomInset + 72),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -290,7 +293,7 @@ class _AcquireScreenState extends State<AcquireScreen> {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    Navigator.pop(context);
+                    Navigator.pop(sheetContext);
                     await state.runBackground();
                   },
                   icon: const Icon(Icons.layers),

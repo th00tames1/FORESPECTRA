@@ -25,27 +25,29 @@ class SettingsScreen extends StatelessWidget {
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        _dropdownField<ThemeMode>(
-                          context: context,
-                          label: 'Theme',
-                          value: state.themeMode,
-                          items: const [
-                            DropdownMenuItem(
-                              value: ThemeMode.light,
-                              child: Text('Light mode'),
-                            ),
-                            DropdownMenuItem(
-                              value: ThemeMode.dark,
-                              child: Text('Dark mode'),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            if (value == null) return;
-                            state.setThemeMode(value);
-                          },
+                        Text('Theme', style: Theme.of(context).textTheme.labelLarge),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: DropdownButtonFormField<ThemeMode>(
+                            key: ValueKey(state.themeMode),
+                            initialValue: state.themeMode,
+                            items: const [
+                              DropdownMenuItem(
+                                value: ThemeMode.light,
+                                child: Text('Light mode'),
+                              ),
+                              DropdownMenuItem(
+                                value: ThemeMode.dark,
+                                child: Text('Dark mode'),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              if (value == null) return;
+                              state.setThemeMode(value);
+                            },
+                          ),
                         ),
                       ],
                     ),

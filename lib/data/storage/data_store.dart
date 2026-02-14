@@ -188,6 +188,30 @@ class DataStore {
     }).toList();
   }
 
+  Future<void> renameMeasurementSampleName(String measurementId, String sampleName) async {
+    await _database.update(
+      'measurements',
+      {
+        'sample_name': sampleName.trim().isEmpty ? null : sampleName.trim(),
+      },
+      where: 'id = ?',
+      whereArgs: [measurementId],
+    );
+  }
+
+  Future<void> deleteMeasurement(String measurementId) async {
+    await _database.delete(
+      'spectra',
+      where: 'measurement_id = ?',
+      whereArgs: [measurementId],
+    );
+    await _database.delete(
+      'measurements',
+      where: 'id = ?',
+      whereArgs: [measurementId],
+    );
+  }
+
   Future<String?> getModelJson(String modelId) async {
     final rows = await _database.query('models', where: 'id = ?', whereArgs: [modelId]);
     if (rows.isEmpty) {

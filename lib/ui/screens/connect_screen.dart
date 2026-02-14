@@ -12,23 +12,10 @@ class ConnectScreen extends StatefulWidget {
 }
 
 class _ConnectScreenState extends State<ConnectScreen> {
-  int _lastPromptSignal = 0;
-  bool _isSensorSheetOpen = false;
-
   @override
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, state, _) {
-        if (state.sensorPickerPromptSignal != _lastPromptSignal) {
-          _lastPromptSignal = state.sensorPickerPromptSignal;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted || _isSensorSheetOpen) {
-              return;
-            }
-            _openSensorPickerSheet(context);
-          });
-        }
-
         final isConnected = state.isConnected;
         final isConnecting = state.isConnecting;
         final isDiscovering = state.isDiscovering;
@@ -215,7 +202,9 @@ class _ConnectScreenState extends State<ConnectScreen> {
                                 child: OutlinedButton.icon(
                                   onPressed: isConnecting || isDiscovering
                                       ? null
-                                      : () => state.requestSensorPicker(startDiscovery: true),
+                                      : () async {
+                                          await _openSensorPickerSheet(context);
+                                        },
                                   icon: isDiscovering
                                       ? const SizedBox(
                                           width: 16,
@@ -245,37 +234,33 @@ class _ConnectScreenState extends State<ConnectScreen> {
 
   Future<void> _openSensorPickerSheet(BuildContext context) async {
     final appState = context.read<AppState>();
-    _isSensorSheetOpen = true;
-    try {
-      final action = await showModalBottomSheet<_SensorPickerAction>(
-        context: context,
-        showDragHandle: true,
-        useSafeArea: true,
-        isScrollControlled: true,
-        backgroundColor: Theme.of(context).cardTheme.color,
-        builder: (_) => _SensorPickerSheet(initialIp: appState.currentIp),
-      );
+    appState.discoverSensors();
+    final action = await showModalBottomSheet<_SensorPickerAction>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).cardTheme.color,
+      builder: (_) => _SensorPickerSheet(initialIp: appState.currentIp),
+    );
 
-      if (action == null) {
-        return;
-      }
-      if (!mounted) {
-        return;
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 24));
-      if (!mounted) {
-        return;
-      }
-      if (action.sensor != null) {
-        await appState.connectToSensor(action.sensor!);
-        return;
-      }
-      final manualIp = action.manualIp?.trim() ?? '';
-      if (manualIp.isNotEmpty) {
-        appState.setCurrentIp(manualIp);
-      }
-    } finally {
-      _isSensorSheetOpen = false;
+    if (action == null) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 24));
+    if (!mounted) {
+      return;
+    }
+    if (action.sensor != null) {
+      await appState.connectToSensor(action.sensor!);
+      return;
+    }
+    final manualIp = action.manualIp?.trim() ?? '';
+    if (manualIp.isNotEmpty) {
+      appState.setCurrentIp(manualIp);
     }
   }
 }

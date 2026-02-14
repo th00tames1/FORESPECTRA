@@ -130,7 +130,7 @@ class AppState extends ChangeNotifier {
           _cancelDiscovery(notify: false);
           statusMessage = 'Connected (verifying...)';
           isVerifyingConnection = true;
-          setTab(1);
+          setTab(0);
           _startConnectDelay();
           _registerDiscoveredSensor(
             DiscoveredSensor(
@@ -165,8 +165,12 @@ class AppState extends ChangeNotifier {
 
   void _startConnectDelay() {
     _connectDelayTimer?.cancel();
-    _connectDelayTimer = Timer(const Duration(seconds: 3), () {
+    _connectDelayTimer = Timer(const Duration(seconds: 2), () {
       showConnectScreen = false;
+      if (isConnected) {
+        setTab(1);
+        return;
+      }
       notifyListeners();
     });
   }
