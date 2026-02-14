@@ -130,7 +130,7 @@ class AppState extends ChangeNotifier {
           _cancelDiscovery(notify: false);
           statusMessage = 'Connected (verifying...)';
           isVerifyingConnection = true;
-          setTab(0);
+          setTab(1);
           _startConnectDelay();
           _registerDiscoveredSensor(
             DiscoveredSensor(
@@ -229,7 +229,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setCurrentIp(String value) {
+  void setCurrentIp(String value, {bool notify = true}) {
     final ip = value.trim();
     if (ip.isEmpty) {
       return;
@@ -239,12 +239,14 @@ class AppState extends ChangeNotifier {
       DiscoveredSensor(ip: ip, verified: false, fromHistory: true),
       notify: false,
     );
-    notifyListeners();
+    if (notify) {
+      notifyListeners();
+    }
   }
 
   Future<void> connectToSensor(DiscoveredSensor sensor) async {
     _cancelDiscovery(notify: false);
-    setCurrentIp(sensor.ip);
+    setCurrentIp(sensor.ip, notify: false);
     await connect(preferredIp: sensor.ip, fallbackToKnown: false);
   }
 
@@ -497,14 +499,18 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateMaterialName(String value) {
+  void updateMaterialName(String value, {bool notify = true}) {
     materialName = value;
-    notifyListeners();
+    if (notify) {
+      notifyListeners();
+    }
   }
 
-  void updateSampleName(String value) {
+  void updateSampleName(String value, {bool notify = true}) {
     sampleName = value;
-    notifyListeners();
+    if (notify) {
+      notifyListeners();
+    }
   }
 
   void setTab(int value) {

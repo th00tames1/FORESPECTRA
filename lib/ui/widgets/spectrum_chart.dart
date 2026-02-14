@@ -69,6 +69,7 @@ class _SpectrumChartState extends State<SpectrumChart> {
                 builder: (context, snapshot) {
                   final points = snapshot.data ?? [const FlSpot(0, 0)];
                   final enableTouch = !widget.simplified;
+                  final xInterval = _computeXInterval(points);
                   return LineChart(
                     LineChartData(
                       minY: widget.minY,
@@ -120,6 +121,7 @@ class _SpectrumChartState extends State<SpectrumChart> {
                           sideTitles: SideTitles(
                             showTitles: true,
                             reservedSize: 26,
+                            interval: xInterval,
                             getTitlesWidget: (value, meta) {
                               return SideTitleWidget(
                                 axisSide: meta.axisSide,
@@ -188,6 +190,9 @@ class _SpectrumChartState extends State<SpectrumChart> {
     if (spectrum == null || spectrum.length == 0) {
       return [const FlSpot(0, 0)];
     }
+    if (widget.simplified) {
+      return _buildPointsSync(spectrum);
+    }
     try {
       final pairs = await compute(_downsamplePairs, {
         'x': spectrum.x,
@@ -242,6 +247,27 @@ class _SpectrumChartState extends State<SpectrumChart> {
       return value.toStringAsFixed(0);
     }
     return value.toStringAsFixed(2);
+  }
+
+  double _computeXInterval(List<FlSpot> points) {
+    if (points.length < 2) {
+      return 1;
+    }
+    var minX = points.first.x;
+    var maxX = points.first.x;
+    for (final point in points) {
+      if (point.x < minX) minX = point.x;
+      if (point.x > maxX) maxX = point.x;
+    }
+    final range = (maxX - minX).abs();
+    if (range <= 0 || !range.isFinite) {
+      return 1;
+    }
+    final interval = range / 4;
+    if (!interval.isFinite || interval <= 0) {
+      return 1;
+    }
+    return interval;
   }
 
   List<FlSpot> _pairsToSpots(List<double> pairs) {

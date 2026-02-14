@@ -42,7 +42,6 @@ class AnalyzeScreen extends StatelessWidget {
                         child: OutlinedButton(
                           onPressed: () {
                             state.discardLatest();
-                            state.setTab(1);
                             Navigator.pop(context);
                           },
                           child: const Text('Cancel'),
@@ -54,28 +53,35 @@ class AnalyzeScreen extends StatelessWidget {
                           onPressed: state.latestSpectrum == null
                               ? null
                               : () async {
-                                  final shouldSave = await _showSaveConfirmDialog(
+                                  final confirm = await _showSaveConfirmDialog(
                                     context,
                                     state,
                                   );
-                                  if (!shouldSave) {
+                                  if (confirm == null) {
                                     return;
                                   }
+                                  state.updateMaterialName(
+                                    confirm.material,
+                                    notify: false,
+                                  );
+                                  state.updateSampleName(
+                                    confirm.sample,
+                                    notify: false,
+                                  );
                                   await state.saveSession();
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context)
-                                      ..hideCurrentSnackBar()
-                                      ..showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Saved'),
-                                          duration: Duration(milliseconds: 1500),
-                                        ),
-                                      );
+                                  if (!context.mounted) {
+                                    return;
                                   }
-                                  state.setTab(1);
-                                  if (context.mounted) {
-                                    Navigator.pop(context);
-                                  }
+                                  final messenger = ScaffoldMessenger.of(context);
+                                  Navigator.of(context).pop();
+                                  messenger
+                                    ..hideCurrentSnackBar()
+                                    ..showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Saved'),
+                                        duration: Duration(milliseconds: 1500),
+                                      ),
+                                    );
                                 },
                           child: const Text('Save'),
                         ),
@@ -91,10 +97,13 @@ class AnalyzeScreen extends StatelessWidget {
     );
   }
 
-  Future<bool> _showSaveConfirmDialog(BuildContext context, AppState state) async {
-    final materialController = TextEditingController(text: state.materialName);
-    final sampleController = TextEditingController(text: state.sampleName);
-    final shouldSave = await showDialog<bool>(
+  Future<_SaveConfirmResult?> _showSaveConfirmDialog(
+    BuildContext context,
+    AppState state,
+  ) async {
+    var material = state.materialName;
+    var sample = state.sampleName;
+    final result = await showDialog<_SaveConfirmResult>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
@@ -102,34 +111,48 @@ class AnalyzeScreen extends StatelessWidget {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
-                controller: materialController,
+              TextFormField(
+                initialValue: material,
+                onChanged: (value) => material = value,
                 decoration: const InputDecoration(labelText: 'Material name'),
               ),
               const SizedBox(height: 10),
-              TextField(
-                controller: sampleController,
+              TextFormField(
+                initialValue: sample,
+                onChanged: (value) => sample = value,
                 decoration: const InputDecoration(labelText: 'Sample name'),
               ),
             ],
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
+              onPressed: () => Navigator.pop(
+                dialogContext,
+                _SaveConfirmResult(
+                  material: material.trim(),
+                  sample: sample.trim(),
+                ),
+              ),
               child: const Text('Save'),
             ),
           ],
         );
       },
     );
-    state.updateMaterialName(materialController.text.trim());
-    state.updateSampleName(sampleController.text.trim());
-    materialController.dispose();
-    sampleController.dispose();
-    return shouldSave == true;
+    return result;
   }
+}
+
+class _SaveConfirmResult {
+  const _SaveConfirmResult({
+    required this.material,
+    required this.sample,
+  });
+
+  final String material;
+  final String sample;
 }

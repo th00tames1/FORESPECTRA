@@ -244,151 +244,221 @@ class _ConnectScreenState extends State<ConnectScreen> {
   }
 
   Future<void> _openSensorPickerSheet(BuildContext context) async {
-    final manualController =
-        TextEditingController(text: context.read<AppState>().currentIp);
+    final appState = context.read<AppState>();
     _isSensorSheetOpen = true;
     try {
-      await showModalBottomSheet(
+      final action = await showModalBottomSheet<_SensorPickerAction>(
         context: context,
         showDragHandle: true,
         useSafeArea: true,
         isScrollControlled: true,
         backgroundColor: Theme.of(context).cardTheme.color,
-        builder: (_) {
-          return Consumer<AppState>(
-            builder: (context, state, __) {
-              final sensors = state.discoveredSensors;
-              final isBusy = state.isDiscovering;
-              return Padding(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  8,
-                  20,
-                  20 + MediaQuery.of(context).viewPadding.bottom,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Select Device',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      isBusy
-                          ? 'Searching hotspot network...'
-                          : 'Choose a saved or discovered sensor IP.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppTheme.muted,
-                          ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: manualController,
-                      decoration: const InputDecoration(
-                        labelText: 'Add device address',
-                        hintText: '10.13.199.8',
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          final ip = manualController.text.trim();
-                          state.setCurrentIp(ip);
-                        },
-                        icon: const Icon(Icons.add_link),
-                        label: const Text('Add address'),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    if (sensors.isEmpty)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                        ),
-                        child: Text(
-                          isBusy ? 'Searching...' : 'No devices found yet.',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: AppTheme.muted),
-                        ),
-                      )
-                    else
-                      Container(
-                        constraints: BoxConstraints(
-                          maxHeight: MediaQuery.of(context).size.height * 0.45,
-                        ),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                          color: Colors.white.withValues(alpha: 0.02),
-                        ),
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          itemCount: sensors.length,
-                          separatorBuilder: (_, __) => Divider(
-                            height: 1,
-                            color: Colors.white.withValues(alpha: 0.08),
-                          ),
-                          itemBuilder: (context, index) {
-                            final sensor = sensors[index];
-                            final subtitleText = sensor.moduleId != null
-                                ? 'Module ${sensor.moduleId}'
-                                : sensor.fromHistory
-                                    ? 'Saved address'
-                                    : 'Reachable host';
-                            return ListTile(
-                              dense: true,
-                              leading: Icon(
-                                sensor.verified ? Icons.sensors_outlined : Icons.history,
-                                color: sensor.verified
-                                    ? Theme.of(context).colorScheme.primary
-                                    : AppTheme.muted,
-                              ),
-                              title: Text(sensor.ip),
-                              subtitle: Text(subtitleText),
-                              onTap: state.isConnecting
-                                  ? null
-                                  : () async {
-                                      Navigator.pop(context);
-                                      await state.connectToSensor(sensor);
-                                    },
-                            );
-                          },
-                        ),
-                      ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: state.isDiscovering ? null : state.discoverSensors,
-                        icon: state.isDiscovering
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.refresh),
-                        label: Text(state.isDiscovering ? 'Searching...' : 'Search again'),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          );
-        },
+        builder: (_) => _SensorPickerSheet(initialIp: appState.currentIp),
       );
+
+      if (action == null) {
+        return;
+      }
+      if (!mounted) {
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 24));
+      if (!mounted) {
+        return;
+      }
+      if (action.sensor != null) {
+        await appState.connectToSensor(action.sensor!);
+        return;
+      }
+      final manualIp = action.manualIp?.trim() ?? '';
+      if (manualIp.isNotEmpty) {
+        appState.setCurrentIp(manualIp);
+      }
     } finally {
-      manualController.dispose();
       _isSensorSheetOpen = false;
     }
+  }
+}
+
+class _SensorPickerAction {
+  const _SensorPickerAction.select(this.sensor) : manualIp = null;
+  const _SensorPickerAction.manual(this.manualIp) : sensor = null;
+
+  final DiscoveredSensor? sensor;
+  final String? manualIp;
+}
+
+class _SensorPickerSheet extends StatefulWidget {
+  const _SensorPickerSheet({required this.initialIp});
+
+  final String initialIp;
+
+  @override
+  State<_SensorPickerSheet> createState() => _SensorPickerSheetState();
+}
+
+class _SensorPickerSheetState extends State<_SensorPickerSheet> {
+  late final TextEditingController _manualController;
+
+  @override
+  void initState() {
+    super.initState();
+    _manualController = TextEditingController(text: widget.initialIp);
+  }
+
+  @override
+  void dispose() {
+    _manualController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AppState>(
+      builder: (context, state, __) {
+        final sensors = state.discoveredSensors;
+        final isBusy = state.isDiscovering;
+        final maxHeight = MediaQuery.of(context).size.height * 0.72;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            8,
+            20,
+            20 + MediaQuery.of(context).viewPadding.bottom,
+          ),
+          child: SizedBox(
+            height: maxHeight,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Select Device',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  isBusy
+                      ? 'Searching hotspot network...'
+                      : 'Choose a saved or discovered sensor IP.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppTheme.muted,
+                      ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _manualController,
+                  decoration: const InputDecoration(
+                    labelText: 'Add device address',
+                    hintText: '10.13.199.8',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      final ip = _manualController.text.trim();
+                      if (ip.isEmpty) {
+                        return;
+                      }
+                      Navigator.pop(
+                        context,
+                        _SensorPickerAction.manual(ip),
+                      );
+                    },
+                    icon: const Icon(Icons.add_link),
+                    label: const Text('Add address'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: sensors.isEmpty
+                      ? Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 14,
+                            horizontal: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.12),
+                            ),
+                          ),
+                          child: Text(
+                            isBusy ? 'Searching...' : 'No devices found yet.',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: AppTheme.muted),
+                          ),
+                        )
+                      : Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.12),
+                            ),
+                            color: Colors.white.withValues(alpha: 0.02),
+                          ),
+                          child: ListView.separated(
+                            itemCount: sensors.length,
+                            separatorBuilder: (_, __) => Divider(
+                              height: 1,
+                              color: Colors.white.withValues(alpha: 0.08),
+                            ),
+                            itemBuilder: (context, index) {
+                              final sensor = sensors[index];
+                              final subtitleText = sensor.moduleId != null
+                                  ? 'Module ${sensor.moduleId}'
+                                  : sensor.fromHistory
+                                      ? 'Saved address'
+                                      : 'Reachable host';
+                              return ListTile(
+                                dense: true,
+                                leading: Icon(
+                                  sensor.verified
+                                      ? Icons.sensors_outlined
+                                      : Icons.history,
+                                  color: sensor.verified
+                                      ? Theme.of(context).colorScheme.primary
+                                      : AppTheme.muted,
+                                ),
+                                title: Text(sensor.ip),
+                                subtitle: Text(subtitleText),
+                                onTap: state.isConnecting
+                                    ? null
+                                    : () {
+                                        Navigator.pop(
+                                          context,
+                                          _SensorPickerAction.select(sensor),
+                                        );
+                                      },
+                              );
+                            },
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: state.isDiscovering ? null : state.discoverSensors,
+                    icon: state.isDiscovering
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh),
+                    label: Text(state.isDiscovering ? 'Searching...' : 'Search again'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }

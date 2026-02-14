@@ -8,12 +8,12 @@ class AppTheme {
   static const _ink = Color(0xFFFFFFFF);
   static const _muted = Color(0xFF9E9E9E);
   static const _warning = Color(0xFFFFC107);
-  static const _lightSurface = Color(0xFFF7F5F5);
-  static const _lightNavSurface = Color(0xFFE9E5E4);
+  static const _lightSurface = Color(0xFFF5F5F5);
+  static const _lightNavSurface = Color(0xFFFFFFFF);
   static const _lightCard = Color(0xFFFFFFFF);
-  static const _lightInk = Color(0xFF423E3C);
-  static const _lightMuted = Color(0xFF5F5956);
-  static const _lightOutline = Color(0xFFD1C8C4);
+  static const _lightInk = Color(0xFF1F1F1F);
+  static const _lightMuted = Color(0xFF7A7A7A);
+  static const _lightOutline = Color(0xFFE5E5E5);
 
   static ThemeData get lightTheme {
     final base = ThemeData.light();
@@ -96,19 +96,25 @@ class AppTheme {
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: _lightNavSurface,
-        indicatorColor: _osuOrange.withValues(alpha: 0.16),
+        indicatorColor: const Color(0x12000000),
         labelTextStyle: MaterialStateProperty.resolveWith((states) {
           final base = textTheme.labelSmall;
           if (states.contains(MaterialState.disabled)) {
             return base?.copyWith(color: _lightMuted);
           }
-          return base?.copyWith(color: _lightInk);
+          if (states.contains(MaterialState.selected)) {
+            return base?.copyWith(color: _lightInk);
+          }
+          return base?.copyWith(color: _lightMuted);
         }),
         iconTheme: MaterialStateProperty.resolveWith((states) {
           if (states.contains(MaterialState.disabled)) {
             return const IconThemeData(color: _lightMuted);
           }
-          return const IconThemeData(color: _lightInk);
+          if (states.contains(MaterialState.selected)) {
+            return const IconThemeData(color: _lightInk);
+          }
+          return const IconThemeData(color: _lightMuted);
         }),
       ),
     );
@@ -212,9 +218,9 @@ class AppTheme {
       ];
     }
     return [
-      const Color(0xFFF7F5F5),
-      const Color(0xFFF4F0EF),
-      const Color(0xFFEFE9E6),
+      const Color(0xFFF5F5F5),
+      const Color(0xFFF5F5F5),
+      const Color(0xFFF5F5F5),
     ];
   }
 

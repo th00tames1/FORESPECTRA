@@ -15,7 +15,6 @@ class AcquireScreen extends StatefulWidget {
 class _AcquireScreenState extends State<AcquireScreen> {
   final TextEditingController _materialController = TextEditingController();
   final TextEditingController _sampleController = TextEditingController();
-  int _lastPromptedCapture = 0;
   bool _resultScreenOpen = false;
   bool _initialized = false;
 
@@ -40,20 +39,12 @@ class _AcquireScreenState extends State<AcquireScreen> {
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, state, _) {
-        if (state.captureCount > _lastPromptedCapture &&
-            !state.isScanning &&
-            !_resultScreenOpen) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _lastPromptedCapture = state.captureCount;
-            _openResultsScreen(context);
-          });
-        }
-
         final bottomInset = MediaQuery.of(context).padding.bottom + 140;
         final minSide = MediaQuery.of(context).size.shortestSide;
         final buttonSize = (minSide * 0.58).clamp(190.0, 240.0);
         final isBusy = state.isScanning || state.isBackgrounding || state.isVerifyingConnection;
-        final canCapture = state.isConnected && state.hasBackground && !isBusy;
+        final canScanTap = state.isConnected && !isBusy;
+        final canCapture = canScanTap && state.hasBackground;
         final statusColor = state.isConnected ? AppTheme.success : AppTheme.warning;
 
         return SafeArea(
@@ -101,7 +92,7 @@ class _AcquireScreenState extends State<AcquireScreen> {
                 const SizedBox(height: 18),
                 Center(
                   child: GestureDetector(
-                    onTap: canCapture ? state.runSpectrum : null,
+                    onTap: canScanTap ? () => _handleScanTap(context, state) : null,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
                       height: buttonSize,
@@ -253,5 +244,63 @@ class _AcquireScreenState extends State<AcquireScreen> {
     } finally {
       _resultScreenOpen = false;
     }
+  }
+
+  Future<void> _handleScanTap(BuildContext context, AppState state) async {
+    if (!state.hasBackground) {
+      await _showReferenceRequiredSheet(context, state);
+      return;
+    }
+    final before = state.captureCount;
+    await state.runSpectrum();
+    if (!mounted || !context.mounted || _resultScreenOpen || state.captureCount <= before) {
+      return;
+    }
+    await _openResultsScreen(context);
+  }
+
+  Future<void> _showReferenceRequiredSheet(BuildContext context, AppState state) async {
+    await showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).cardTheme.color,
+      builder: (_) {
+        final safeBottom = MediaQuery.of(context).viewPadding.bottom;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + safeBottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Reference is required before scanning.',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Tap Set reference to proceed.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.muted,
+                    ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    await state.runBackground();
+                  },
+                  icon: const Icon(Icons.layers),
+                  label: const Text('Set reference'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

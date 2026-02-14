@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 import '../../domain/measurement.dart';
 import '../../services/app_state.dart';
 import '../theme/app_theme.dart';
-import '../widgets/spectrum_chart.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -17,6 +16,7 @@ class HistoryScreen extends StatefulWidget {
 
 class _HistoryScreenState extends State<HistoryScreen> {
   String _query = '';
+  String? _expandedId;
 
   @override
   Widget build(BuildContext context) {
@@ -69,20 +69,50 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                     ? null
                                     : jsonDecode(item.resultsJson!) as Map<String, dynamic>;
                                 return Card(
-                                  child: ListTile(
-                                    leading: const Icon(Icons.show_chart),
-                                    title: Text(
-                                      item.sampleName == null || item.sampleName!.isEmpty
-                                          ? 'Scan ${item.id.substring(0, 8)}'
-                                          : item.sampleName!,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(4),
+                                    child: Column(
+                                      children: [
+                                        ListTile(
+                                          leading: const Icon(Icons.show_chart),
+                                          title: Text(
+                                            item.sampleName == null || item.sampleName!.isEmpty
+                                                ? 'Scan ${item.id.substring(0, 8)}'
+                                                : item.sampleName!,
+                                          ),
+                                          subtitle: Text(
+                                            '${item.materialName ?? 'Unknown material'} • ${item.timestamp}',
+                                          ),
+                                          trailing: results == null
+                                              ? const Text('—')
+                                              : Text('${results['value']} ${results['units']}'),
+                                          onTap: () {
+                                            setState(() {
+                                              _expandedId = _expandedId == item.id ? null : item.id;
+                                            });
+                                          },
+                                        ),
+                                        if (_expandedId == item.id)
+                                          Padding(
+                                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                const Divider(height: 12),
+                                                Text('Scan ${item.id}'),
+                                                const SizedBox(height: 6),
+                                                Text('Device: ${item.deviceId}'),
+                                                if (item.materialName != null)
+                                                  Text('Material: ${item.materialName}'),
+                                                if (item.sampleName != null)
+                                                  Text('Sample: ${item.sampleName}'),
+                                                Text('Timestamp: ${item.timestamp}'),
+                                                Text('Scan time: ${item.scanTimeMs} ms'),
+                                              ],
+                                            ),
+                                          ),
+                                      ],
                                     ),
-                                    subtitle: Text(
-                                      '${item.materialName ?? 'Unknown material'} • ${item.timestamp}',
-                                    ),
-                                    trailing: results == null
-                                        ? const Text('—')
-                                        : Text('${results['value']} ${results['units']}'),
-                                    onTap: () => _showDetails(context, item, results),
                                   ),
                                 );
                               },
@@ -98,79 +128,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  void _showDetails(
-      BuildContext context, Measurement item, Map<String, dynamic>? results) {
-    final spectraFuture = context.read<AppState>().dataStore.getSpectra(item.id);
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Theme.of(context).cardTheme.color,
-      builder: (_) {
-        final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-        final safeBottom = MediaQuery.of(context).viewPadding.bottom;
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              20,
-              20,
-              20 + bottomInset + safeBottom + 32,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Scan ${item.id}', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  Text('Device: ${item.deviceId}'),
-                  if (item.materialName != null) Text('Material: ${item.materialName}'),
-                  if (item.sampleName != null) Text('Sample: ${item.sampleName}'),
-                  Text('Timestamp: ${item.timestamp}'),
-                  Text('Scan time: ${item.scanTimeMs} ms'),
-                  const SizedBox(height: 16),
-                  FutureBuilder(
-                    future: spectraFuture,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 16),
-                          child: Center(child: CircularProgressIndicator()),
-                        );
-                      }
-                      if (snapshot.hasError) {
-                        return Text(
-                          'Unable to load spectrum.',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        );
-                      }
-                      final spectra = snapshot.data ?? [];
-                      if (spectra.isEmpty) {
-                        return Text(
-                          'No spectrum saved for this scan.',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        );
-                      }
-                      return SpectrumChart(
-                        spectrum: spectra.first.toSpectrum(),
-                        title: 'Spectrum',
-                        axisUnit: context.read<AppState>().spectrumAxisUnit,
-                        maxPoints: 128,
-                        simplified: true,
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 }
 
 class _EmptyState extends StatelessWidget {
