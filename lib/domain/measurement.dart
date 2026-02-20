@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:math' as math;
 
 import 'spectrum.dart';
 
@@ -48,9 +49,32 @@ class SpectrumBlob {
   final Uint8List yBytes;
 
   Spectrum toSpectrum() {
-    return Spectrum(
-      x: Float64List.view(xBytes.buffer),
-      y: Float64List.view(yBytes.buffer),
+    final count = math.min(
+      length,
+      math.min(
+        xBytes.lengthInBytes ~/ Float64List.bytesPerElement,
+        yBytes.lengthInBytes ~/ Float64List.bytesPerElement,
+      ),
     );
+    if (count <= 0) {
+      return Spectrum(x: Float64List(0), y: Float64List(0));
+    }
+    return Spectrum(
+      x: _decodeFloat64(xBytes, count),
+      y: _decodeFloat64(yBytes, count),
+    );
+  }
+
+  Float64List _decodeFloat64(Uint8List source, int count) {
+    final safeCount = math.min(
+      count,
+      source.lengthInBytes ~/ Float64List.bytesPerElement,
+    );
+    final out = Float64List(safeCount);
+    final data = ByteData.sublistView(source);
+    for (var i = 0; i < safeCount; i += 1) {
+      out[i] = data.getFloat64(i * Float64List.bytesPerElement, Endian.little);
+    }
+    return out;
   }
 }

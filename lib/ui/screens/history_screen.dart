@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -179,24 +181,30 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Future<void> _showItemActions(Measurement item) async {
     final action = await showModalBottomSheet<String>(
       context: context,
+      useRootNavigator: true,
       showDragHandle: true,
+      isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Theme.of(context).cardTheme.color,
       builder: (sheetContext) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.edit),
-              title: const Text('Rename'),
-              onTap: () => Navigator.pop(sheetContext, 'rename'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: const Text('Delete'),
-              onTap: () => Navigator.pop(sheetContext, 'delete'),
-            ),
-          ],
+        final safeBottom = MediaQuery.of(sheetContext).viewPadding.bottom;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(16, 0, 16, 24 + safeBottom + 72),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.edit),
+                title: const Text('Rename'),
+                onTap: () => Navigator.pop(sheetContext, 'rename'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('Delete'),
+                onTap: () => Navigator.pop(sheetContext, 'delete'),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -341,33 +349,219 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<String> _exportCsv(List<Measurement> items) async {
+    final dataStore = context.read<AppState>().dataStore;
     final rows = <String>[];
-    rows.add(
-      'id,timestamp,device_id,material_name,sample_name,scan_time_ms,lat,lon,value,units',
-    );
+    final prepared = <Map<String, Object?>>[];
+    var maxBands = 0;
+    var referenceBands = <double>[];
+
     for (final item in items) {
       final result = item.resultsJson == null
           ? null
           : jsonDecode(item.resultsJson!) as Map<String, dynamic>;
-      rows.add([
-        _csv(item.id),
-        _csv(item.timestamp.toIso8601String()),
-        _csv(item.deviceId),
-        _csv(item.materialName ?? ''),
+      final spectra = await dataStore.getSpectra(item.id);
+      final blob = _pickPreferredSpectrum(spectra);
+      final spectrum = blob?.toSpectrum();
+      final pairs = <List<double>>[];
+      if (spectrum != null && blob != null) {
+        final bandCount = math.min(
+          blob.length,
+          math.min(spectrum.x.length, spectrum.y.length),
+        );
+        for (var i = 0; i < bandCount; i += 1) {
+          final wavelengthNm = _toNmFromCmInv(spectrum.x[i]);
+          if (wavelengthNm == null) {
+            continue;
+          }
+          final reflectance = spectrum.y[i];
+          if (!reflectance.isFinite) {
+            continue;
+          }
+          pairs.add([wavelengthNm, reflectance]);
+        }
+        pairs.sort((a, b) => a[0].compareTo(b[0]));
+      }
+      final wavelengths = pairs.map((e) => e[0]).toList(growable: false);
+      final reflectances = pairs.map((e) => e[1]).toList(growable: false);
+      final bandCount = wavelengths.length;
+      if (bandCount > maxBands) {
+        maxBands = bandCount;
+        referenceBands = wavelengths;
+      }
+      prepared.add({
+        'item': item,
+        'result': result,
+        'sampleType': _sampleType(blob),
+        'commonWave': _commonWaveLabel(item.paramsJson),
+        'wavelengths': wavelengths,
+        'reflectances': reflectances,
+        'bandCount': bandCount,
+      });
+    }
+
+    final header = <String>[
+      'Sample Type',
+      'Sample Name',
+      'Material Name',
+      'Device Id',
+      'Created At (UTC)',
+      'Scan Time',
+      'Common Wave Number',
+      'Device Temperature',
+      'Latitude',
+      'Longitude',
+      'Analysis Value',
+      'Analysis Units',
+    ];
+    for (var i = 0; i < maxBands; i += 1) {
+      if (i < referenceBands.length) {
+        header.add(_csv(referenceBands[i].toStringAsFixed(3)));
+      } else {
+        header.add(_csv(''));
+      }
+    }
+    rows.add(header.join(','));
+
+    for (final entry in prepared) {
+      final item = entry['item'] as Measurement;
+      final result = entry['result'] as Map<String, dynamic>?;
+      final sampleType = entry['sampleType'] as String? ?? 'Spectrum';
+      final commonWave = entry['commonWave'] as String? ?? '';
+      final reflectances = entry['reflectances'] as List<double>;
+      final bandCount = entry['bandCount'] as int;
+
+      final line = <String>[
+        _csv(sampleType),
         _csv(item.sampleName ?? ''),
-        _csv(item.scanTimeMs.toString()),
+        _csv(item.materialName ?? ''),
+        _csv(item.deviceId),
+        _csv(_formatUtc(item.timestamp)),
+        _csv(_formatScanTimeSeconds(item.scanTimeMs)),
+        _csv(commonWave),
+        _csv(''),
         _csv(item.latitude?.toString() ?? ''),
         _csv(item.longitude?.toString() ?? ''),
         _csv(result?['value']?.toString() ?? ''),
         _csv(result?['units']?.toString() ?? ''),
-      ].join(','));
+      ];
+
+      for (var i = 0; i < maxBands; i += 1) {
+        if (i < bandCount) {
+          line.add(_csv(reflectances[i].toStringAsFixed(6)));
+        } else {
+          line.add(_csv(''));
+        }
+      }
+
+      rows.add(line.join(','));
     }
-    final dir = await getApplicationDocumentsDirectory();
     final fileName = 'history_export_${DateTime.now().millisecondsSinceEpoch}.csv';
-    final filePath = p.join(dir.path, fileName);
-    final file = File(filePath);
-    await file.writeAsString(rows.join('\n'));
-    return filePath;
+    final content = rows.join('\n');
+
+    final preferredDir = await _resolveCsvDirectory();
+    final preferredPath = p.join(preferredDir.path, fileName);
+    try {
+      final file = File(preferredPath);
+      await file.writeAsString(content);
+      return preferredPath;
+    } catch (_) {
+      final fallbackDir = await getApplicationDocumentsDirectory();
+      final fallbackPath = p.join(fallbackDir.path, fileName);
+      final fallbackFile = File(fallbackPath);
+      await fallbackFile.writeAsString(content);
+      return fallbackPath;
+    }
+  }
+
+  String _formatUtc(DateTime timestamp) {
+    final utc = timestamp.toUtc();
+    return DateFormat('d MMM yyyy, h:mm a').format(utc);
+  }
+
+  String _formatScanTimeSeconds(int scanTimeMs) {
+    final seconds = scanTimeMs / 1000.0;
+    if (seconds == seconds.roundToDouble()) {
+      return seconds.toStringAsFixed(0);
+    }
+    return seconds.toStringAsFixed(3);
+  }
+
+  String _sampleType(SpectrumBlob? blob) {
+    if (blob == null) {
+      return 'Spectrum';
+    }
+    if (blob.kind == 'raw') {
+      return 'Spectrum';
+    }
+    if (blob.kind == 'background') {
+      return 'Background';
+    }
+    return blob.kind;
+  }
+
+  String _commonWaveLabel(String paramsJson) {
+    try {
+      final map = jsonDecode(paramsJson) as Map<String, dynamic>;
+      final raw = map['commonWavNum'];
+      if (raw is! num) {
+        return '';
+      }
+      switch (raw.toInt()) {
+        case 1:
+          return '65 pts';
+        case 2:
+          return '129 pts';
+        case 3:
+          return '257 pts';
+        case 4:
+          return '513 pts';
+        case 5:
+          return '1024 pts';
+        case 6:
+          return '2048 pts';
+        case 7:
+          return '4096 pts';
+        default:
+          return '';
+      }
+    } catch (_) {
+      return '';
+    }
+  }
+
+  SpectrumBlob? _pickPreferredSpectrum(List<SpectrumBlob> spectra) {
+    if (spectra.isEmpty) {
+      return null;
+    }
+    for (final blob in spectra) {
+      if (blob.kind == 'raw') {
+        return blob;
+      }
+    }
+    return spectra.first;
+  }
+
+  double? _toNmFromCmInv(double wavenumber) {
+    if (!wavenumber.isFinite || wavenumber <= 100) {
+      return null;
+    }
+    return 10000000.0 / wavenumber;
+  }
+
+  Future<Directory> _resolveCsvDirectory() async {
+    if (Platform.isAndroid) {
+      final publicDownload = Directory('/storage/emulated/0/Download');
+      if (await publicDownload.exists()) {
+        return publicDownload;
+      }
+      final external = await getExternalStorageDirectories(
+        type: StorageDirectory.downloads,
+      );
+      if (external != null && external.isNotEmpty) {
+        return external.first;
+      }
+    }
+    return getApplicationDocumentsDirectory();
   }
 
   String _csv(String value) {

@@ -40,7 +40,6 @@ class _AcquireScreenState extends State<AcquireScreen> {
     return Consumer<AppState>(
       builder: (context, state, _) {
         final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
-        final keyboardOpen = keyboardInset > 0;
         final minSide = MediaQuery.of(context).size.shortestSide;
         final buttonSize = (minSide * 0.58).clamp(190.0, 240.0);
         final isBusy = state.isScanning || state.isBackgrounding || state.isVerifyingConnection;
@@ -55,9 +54,19 @@ class _AcquireScreenState extends State<AcquireScreen> {
             child: AnimatedPadding(
               duration: const Duration(milliseconds: 160),
               padding: EdgeInsets.only(bottom: keyboardInset),
-              child: keyboardOpen
-                  ? SingleChildScrollView(child: _buildContent(context, state, buttonSize, canScanTap, canCapture, isBusy, statusColor, false))
-                  : _buildContent(context, state, buttonSize, canScanTap, canCapture, isBusy, statusColor, true),
+              child: SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                child: _buildContent(
+                    context,
+                    state,
+                    buttonSize,
+                    canScanTap,
+                    canCapture,
+                    isBusy,
+                    statusColor,
+                  ),
+              ),
             ),
           ),
         );
@@ -73,7 +82,6 @@ class _AcquireScreenState extends State<AcquireScreen> {
     bool canCapture,
     bool isBusy,
     Color statusColor,
-    bool includeSpacer,
   ) {
     return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -226,7 +234,6 @@ class _AcquireScreenState extends State<AcquireScreen> {
                     ),
                   ),
                 ),
-                if (includeSpacer) const Spacer(),
               ],
             );
   }

@@ -200,7 +200,11 @@ class _SpectrumChartState extends State<SpectrumChart> {
         'maxPoints': widget.maxPoints,
         'axisUnit': widget.axisUnit,
       });
-      return _pairsToSpots(pairs);
+      final points = _pairsToSpots(pairs);
+      if (widget.axisUnit != 'DN') {
+        points.sort((a, b) => a.x.compareTo(b.x));
+      }
+      return points;
     } catch (_) {
       return _buildPointsSync(spectrum);
     }
@@ -217,6 +221,9 @@ class _SpectrumChartState extends State<SpectrumChart> {
       points.add(FlSpot(x, spectrum.y[i]));
       dn += 1;
     }
+    if (widget.axisUnit != 'DN') {
+      points.sort((a, b) => a.x.compareTo(b.x));
+    }
     return points;
   }
 
@@ -225,11 +232,12 @@ class _SpectrumChartState extends State<SpectrumChart> {
       case 'DN':
         return dn.toDouble();
       case 'cm^-1':
+        return x;
+      case 'nm':
         if (x <= 0) {
           return 0;
         }
         return 10000000.0 / x;
-      case 'nm':
       default:
         return x;
     }
@@ -295,6 +303,8 @@ List<double> _downsamplePairs(Map<String, Object> args) {
     if (axisUnit == 'DN') {
       pairs.add(dn.toDouble());
     } else if (axisUnit == 'cm^-1') {
+      pairs.add(x[i]);
+    } else if (axisUnit == 'nm') {
       final raw = x[i];
       pairs.add(raw <= 0 ? 0 : 10000000.0 / raw);
     } else {
