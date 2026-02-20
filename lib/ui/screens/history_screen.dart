@@ -46,7 +46,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
             return Scaffold(
               backgroundColor: Colors.transparent,
               floatingActionButton: FloatingActionButton.extended(
-                onPressed: filtered.isEmpty ? null : () => _showCsvExportSheet(filtered),
+                onPressed: filtered.isEmpty
+                    ? null
+                    : () => _showCsvExportSheet(filtered),
                 icon: const Icon(Icons.file_download_outlined),
                 label: const Text('CSV'),
               ),
@@ -55,118 +57,174 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
                   child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('History', style: Theme.of(context).textTheme.headlineMedium),
-                    const SizedBox(height: 6),
-                    Text('Review your recent scans.',
-                        style: Theme.of(context).textTheme.bodyMedium),
-                    const SizedBox(height: 12),
-                    TextField(
-                      decoration: const InputDecoration(
-                        hintText: 'Search by device or session',
-                        prefixIcon: Icon(Icons.search),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'History',
+                        style: Theme.of(context).textTheme.headlineMedium,
                       ),
-                      onChanged: (value) => setState(() => _query = value.trim()),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Text('Sort', style: Theme.of(context).textTheme.labelLarge),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: DropdownButtonFormField<_HistorySort>(
-                            initialValue: _sort,
-                            items: const [
-                              DropdownMenuItem(
-                                value: _HistorySort.dateDesc,
-                                child: Text('Date (newest)'),
-                              ),
-                              DropdownMenuItem(
-                                value: _HistorySort.dateAsc,
-                                child: Text('Date (oldest)'),
-                              ),
-                              DropdownMenuItem(
-                                value: _HistorySort.nameAsc,
-                                child: Text('Name (A-Z)'),
-                              ),
-                              DropdownMenuItem(
-                                value: _HistorySort.nameDesc,
-                                child: Text('Name (Z-A)'),
-                              ),
-                            ],
-                            onChanged: (value) {
-                              if (value == null) return;
-                              setState(() => _sort = value);
-                            },
-                          ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Review your recent scans.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        decoration: const InputDecoration(
+                          hintText: 'Search by device or session',
+                          prefixIcon: Icon(Icons.search),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: filtered.isEmpty
-                          ? _EmptyState(onGoScan: () {})
-                          : ListView.separated(
-                              padding: EdgeInsets.only(bottom: bottomInset),
-                              itemCount: filtered.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 12),
-                              itemBuilder: (context, index) {
-                                final item = filtered[index];
-                                final results = item.resultsJson == null
-                                    ? null
-                                    : jsonDecode(item.resultsJson!) as Map<String, dynamic>;
-                                return Card(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(4),
-                                    child: Column(
-                                      children: [
-                                        ListTile(
-                                          leading: const Icon(Icons.show_chart),
-                                          title: Text(
-                                            item.sampleName == null || item.sampleName!.isEmpty
-                                                ? 'Scan ${item.id.substring(0, 8)}'
-                                                : item.sampleName!,
-                                          ),
-                                          subtitle: Text(
-                                            '${item.materialName ?? 'Unknown material'} • ${item.timestamp}',
-                                          ),
-                                          trailing: results == null
-                                              ? const Text('—')
-                                              : Text('${results['value']} ${results['units']}'),
-                                          onLongPress: () => _showItemActions(item),
-                                          onTap: () {
-                                            setState(() {
-                                              _expandedId = _expandedId == item.id ? null : item.id;
-                                            });
-                                          },
-                                        ),
-                                        if (_expandedId == item.id)
-                                          Padding(
-                                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                const Divider(height: 12),
-                                                Text('Scan ${item.id}'),
-                                                const SizedBox(height: 6),
-                                                Text('Device: ${item.deviceId}'),
-                                                if (item.materialName != null)
-                                                  Text('Material: ${item.materialName}'),
-                                                if (item.sampleName != null)
-                                                  Text('Sample: ${item.sampleName}'),
-                                                Text('Timestamp: ${item.timestamp}'),
-                                                Text('Scan time: ${item.scanTimeMs} ms'),
-                                              ],
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                );
+                        onChanged: (value) =>
+                            setState(() => _query = value.trim()),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Text(
+                            'Sort',
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: DropdownButtonFormField<_HistorySort>(
+                              initialValue: _sort,
+                              items: const [
+                                DropdownMenuItem(
+                                  value: _HistorySort.dateDesc,
+                                  child: Text('Date (newest)'),
+                                ),
+                                DropdownMenuItem(
+                                  value: _HistorySort.dateAsc,
+                                  child: Text('Date (oldest)'),
+                                ),
+                                DropdownMenuItem(
+                                  value: _HistorySort.nameAsc,
+                                  child: Text('Name (A-Z)'),
+                                ),
+                                DropdownMenuItem(
+                                  value: _HistorySort.nameDesc,
+                                  child: Text('Name (Z-A)'),
+                                ),
+                              ],
+                              onChanged: (value) {
+                                if (value == null) return;
+                                setState(() => _sort = value);
                               },
                             ),
-                    ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: filtered.isEmpty
+                            ? _EmptyState(onGoScan: () {})
+                            : ListView.separated(
+                                padding: EdgeInsets.only(bottom: bottomInset),
+                                itemCount: filtered.length,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 12),
+                                itemBuilder: (context, index) {
+                                  final item = filtered[index];
+                                  final analyses = _decodeAnalyses(
+                                    item.resultsJson,
+                                  );
+                                  final summary = _analysisSummary(analyses);
+                                  return Card(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(4),
+                                      child: Column(
+                                        children: [
+                                          ListTile(
+                                            leading: const Icon(
+                                              Icons.show_chart,
+                                            ),
+                                            title: Text(
+                                              item.sampleName == null ||
+                                                      item.sampleName!.isEmpty
+                                                  ? 'Scan ${item.id.substring(0, 8)}'
+                                                  : item.sampleName!,
+                                            ),
+                                            subtitle: Text(
+                                              '${item.materialName ?? 'Unknown material'} • ${item.timestamp}',
+                                            ),
+                                            trailing: SizedBox(
+                                              width: 120,
+                                              child: Text(
+                                                summary,
+                                                textAlign: TextAlign.right,
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            onLongPress: () =>
+                                                _showItemActions(item),
+                                            onTap: () {
+                                              setState(() {
+                                                _expandedId =
+                                                    _expandedId == item.id
+                                                    ? null
+                                                    : item.id;
+                                              });
+                                            },
+                                          ),
+                                          if (_expandedId == item.id)
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.fromLTRB(
+                                                    16,
+                                                    0,
+                                                    16,
+                                                    12,
+                                                  ),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  const Divider(height: 12),
+                                                  Text('Scan ${item.id}'),
+                                                  const SizedBox(height: 6),
+                                                  Text(
+                                                    'Device: ${item.deviceId}',
+                                                  ),
+                                                  if (item.materialName != null)
+                                                    Text(
+                                                      'Material: ${item.materialName}',
+                                                    ),
+                                                  if (item.sampleName != null)
+                                                    Text(
+                                                      'Sample: ${item.sampleName}',
+                                                    ),
+                                                  Text(
+                                                    'Timestamp: ${item.timestamp}',
+                                                  ),
+                                                  Text(
+                                                    'Scan time: ${item.scanTimeMs} ms',
+                                                  ),
+                                                  if (analyses.isNotEmpty) ...[
+                                                    const SizedBox(height: 8),
+                                                    Text(
+                                                      'Analysis',
+                                                      style: Theme.of(
+                                                        context,
+                                                      ).textTheme.labelLarge,
+                                                    ),
+                                                    const SizedBox(height: 4),
+                                                    ...analyses.map(
+                                                      (analysis) => Text(
+                                                        '${analysis.label}: ${analysis.displayValue}',
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
                     ],
                   ),
                 ),
@@ -255,7 +313,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            final allSelected = selected.length == items.length && items.isNotEmpty;
+            final allSelected =
+                selected.length == items.length && items.isNotEmpty;
             return Padding(
               padding: EdgeInsets.fromLTRB(
                 20,
@@ -267,7 +326,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Export CSV', style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Export CSV',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 8),
                   CheckboxListTile(
                     value: allSelected,
@@ -293,7 +355,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       itemBuilder: (context, index) {
                         final item = items[index];
                         final checked = selected.contains(item.id);
-                        final label = item.sampleName == null || item.sampleName!.isEmpty
+                        final label =
+                            item.sampleName == null || item.sampleName!.isEmpty
                             ? 'Scan ${item.id.substring(0, 8)}'
                             : item.sampleName!;
                         return CheckboxListTile(
@@ -322,8 +385,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           ? null
                           : () async {
                               Navigator.pop(sheetContext);
-                              final messenger = ScaffoldMessenger.of(this.context);
-                              final chosen = items.where((e) => selected.contains(e.id)).toList();
+                              final messenger = ScaffoldMessenger.of(
+                                this.context,
+                              );
+                              final chosen = items
+                                  .where((e) => selected.contains(e.id))
+                                  .toList();
                               final path = await _exportCsv(chosen);
                               if (!mounted) return;
                               messenger
@@ -354,11 +421,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final prepared = <Map<String, Object?>>[];
     var maxBands = 0;
     var referenceBands = <double>[];
+    final analysisColumns = <String, _CsvAnalysisColumn>{};
 
     for (final item in items) {
-      final result = item.resultsJson == null
-          ? null
-          : jsonDecode(item.resultsJson!) as Map<String, dynamic>;
+      final analyses = _decodeAnalyses(item.resultsJson);
+      for (final analysis in analyses) {
+        analysisColumns.putIfAbsent(
+          analysis.columnKey,
+          () => _CsvAnalysisColumn(
+            key: analysis.columnKey,
+            header: analysis.columnHeader,
+          ),
+        );
+      }
+
       final spectra = await dataStore.getSpectra(item.id);
       final blob = _pickPreferredSpectrum(spectra);
       final spectrum = blob?.toSpectrum();
@@ -390,7 +466,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       }
       prepared.add({
         'item': item,
-        'result': result,
+        'analyses': analyses,
         'sampleType': _sampleType(blob),
         'commonWave': _commonWaveLabel(item.paramsJson),
         'wavelengths': wavelengths,
@@ -410,52 +486,64 @@ class _HistoryScreenState extends State<HistoryScreen> {
       'Device Temperature',
       'Latitude',
       'Longitude',
+      'Analysis Summary',
       'Analysis Value',
       'Analysis Units',
     ];
+    for (final column in analysisColumns.values) {
+      header.add(column.header);
+    }
     for (var i = 0; i < maxBands; i += 1) {
       if (i < referenceBands.length) {
-        header.add(_csv(referenceBands[i].toStringAsFixed(3)));
+        header.add(referenceBands[i].toStringAsFixed(3));
       } else {
-        header.add(_csv(''));
+        header.add('');
       }
     }
-    rows.add(header.join(','));
+    rows.add(header.map(_csv).join(','));
 
     for (final entry in prepared) {
       final item = entry['item'] as Measurement;
-      final result = entry['result'] as Map<String, dynamic>?;
+      final analyses = entry['analyses'] as List<_HistoryAnalysis>;
+      final summary = _analysisSummary(analyses);
+      final primary = analyses.isEmpty ? null : analyses.first;
       final sampleType = entry['sampleType'] as String? ?? 'Spectrum';
       final commonWave = entry['commonWave'] as String? ?? '';
       final reflectances = entry['reflectances'] as List<double>;
       final bandCount = entry['bandCount'] as int;
 
-      final line = <String>[
-        _csv(sampleType),
-        _csv(item.sampleName ?? ''),
-        _csv(item.materialName ?? ''),
-        _csv(item.deviceId),
-        _csv(_formatUtc(item.timestamp)),
-        _csv(_formatScanTimeSeconds(item.scanTimeMs)),
-        _csv(commonWave),
-        _csv(''),
-        _csv(item.latitude?.toString() ?? ''),
-        _csv(item.longitude?.toString() ?? ''),
-        _csv(result?['value']?.toString() ?? ''),
-        _csv(result?['units']?.toString() ?? ''),
+      final values = <String>[
+        sampleType,
+        item.sampleName ?? '',
+        item.materialName ?? '',
+        item.deviceId,
+        _formatUtc(item.timestamp),
+        _formatScanTimeSeconds(item.scanTimeMs),
+        commonWave,
+        '',
+        item.latitude?.toString() ?? '',
+        item.longitude?.toString() ?? '',
+        summary,
+        primary?.primaryValue ?? '',
+        primary?.units ?? '',
       ];
+
+      for (final column in analysisColumns.values) {
+        values.add(_analysisValueForColumn(analyses, column.key));
+      }
 
       for (var i = 0; i < maxBands; i += 1) {
         if (i < bandCount) {
-          line.add(_csv(reflectances[i].toStringAsFixed(6)));
+          values.add(reflectances[i].toStringAsFixed(6));
         } else {
-          line.add(_csv(''));
+          values.add('');
         }
       }
 
-      rows.add(line.join(','));
+      rows.add(values.map(_csv).join(','));
     }
-    final fileName = 'history_export_${DateTime.now().millisecondsSinceEpoch}.csv';
+    final fileName =
+        'history_export_${DateTime.now().millisecondsSinceEpoch}.csv';
     final content = rows.join('\n');
 
     final preferredDir = await _resolveCsvDirectory();
@@ -471,6 +559,64 @@ class _HistoryScreenState extends State<HistoryScreen> {
       await fallbackFile.writeAsString(content);
       return fallbackPath;
     }
+  }
+
+  List<_HistoryAnalysis> _decodeAnalyses(String? resultsJson) {
+    if (resultsJson == null || resultsJson.trim().isEmpty) {
+      return const <_HistoryAnalysis>[];
+    }
+
+    try {
+      final decoded = jsonDecode(resultsJson);
+      if (decoded is Map<String, dynamic>) {
+        final analyses = decoded['analyses'];
+        if (analyses is List) {
+          return analyses
+              .whereType<Map>()
+              .map(
+                (map) =>
+                    _HistoryAnalysis.fromMap(Map<String, dynamic>.from(map)),
+              )
+              .toList(growable: false);
+        }
+        if (decoded.containsKey('label') || decoded.containsKey('value')) {
+          return <_HistoryAnalysis>[_HistoryAnalysis.fromMap(decoded)];
+        }
+      }
+      if (decoded is List) {
+        return decoded
+            .whereType<Map>()
+            .map(
+              (map) => _HistoryAnalysis.fromMap(Map<String, dynamic>.from(map)),
+            )
+            .toList(growable: false);
+      }
+    } catch (_) {
+      return const <_HistoryAnalysis>[];
+    }
+
+    return const <_HistoryAnalysis>[];
+  }
+
+  String _analysisSummary(List<_HistoryAnalysis> analyses) {
+    if (analyses.isEmpty) {
+      return '—';
+    }
+    return analyses
+        .map((analysis) => '${analysis.label}: ${analysis.displayValue}')
+        .join(', ');
+  }
+
+  String _analysisValueForColumn(
+    List<_HistoryAnalysis> analyses,
+    String columnKey,
+  ) {
+    for (final analysis in analyses) {
+      if (analysis.columnKey == columnKey) {
+        return analysis.displayValue;
+      }
+    }
+    return '';
   }
 
   String _formatUtc(DateTime timestamp) {
@@ -587,7 +733,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+              onPressed: () =>
+                  Navigator.pop(dialogContext, controller.text.trim()),
               child: const Text('Save'),
             ),
           ],
@@ -598,10 +745,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     if (!mounted || renamed == null) {
       return;
     }
-    await dataStore.renameMeasurementSampleName(
-          item.id,
-          renamed,
-        );
+    await dataStore.renameMeasurementSampleName(item.id, renamed);
     if (!mounted) {
       return;
     }
@@ -642,15 +786,93 @@ class _HistoryScreenState extends State<HistoryScreen> {
       }
     });
   }
-
 }
 
-enum _HistorySort {
-  dateDesc,
-  dateAsc,
-  nameAsc,
-  nameDesc,
+class _HistoryAnalysis {
+  const _HistoryAnalysis({
+    required this.modelId,
+    required this.modelName,
+    required this.label,
+    required this.displayValue,
+    required this.units,
+    required this.primaryValue,
+  });
+
+  final String modelId;
+  final String modelName;
+  final String label;
+  final String displayValue;
+  final String units;
+  final String primaryValue;
+
+  String get columnKey {
+    if (modelId.isNotEmpty) {
+      return modelId;
+    }
+    final raw = '$label|$modelName';
+    return raw.toLowerCase().replaceAll(RegExp(r'\s+'), '_');
+  }
+
+  String get columnHeader {
+    if (modelName.isNotEmpty) {
+      return '$label ($modelName)';
+    }
+    return label;
+  }
+
+  factory _HistoryAnalysis.fromMap(Map<String, dynamic> map) {
+    final labelRaw = (map['label']?.toString() ?? '').trim();
+    final label = labelRaw.isEmpty ? 'Result' : labelRaw;
+    final units = (map['units']?.toString() ?? '').trim();
+
+    final numericValue = map['numericValue'] is num
+        ? (map['numericValue'] as num).toDouble()
+        : map['value'] is num
+        ? (map['value'] as num).toDouble()
+        : null;
+    final displayRaw = (map['displayValue']?.toString() ?? '').trim();
+    final fallbackRaw = (map['value']?.toString() ?? '').trim();
+
+    final displayValue = displayRaw.isNotEmpty
+        ? displayRaw
+        : numericValue != null
+        ? _formatNumeric(numericValue, units)
+        : (fallbackRaw.isNotEmpty ? fallbackRaw : '—');
+
+    final primaryValue = numericValue != null
+        ? numericValue.toStringAsFixed(2)
+        : (fallbackRaw.isNotEmpty ? fallbackRaw : displayValue);
+
+    return _HistoryAnalysis(
+      modelId: (map['modelId']?.toString() ?? '').trim(),
+      modelName: (map['modelName']?.toString() ?? '').trim(),
+      label: label,
+      displayValue: displayValue,
+      units: units,
+      primaryValue: primaryValue,
+    );
+  }
+
+  static String _formatNumeric(double value, String units) {
+    final number = value.toStringAsFixed(2);
+    if (units.isEmpty) {
+      return number;
+    }
+    if (units == '%') {
+      return '$number%';
+    }
+    return '$number $units';
+  }
 }
+
+class _CsvAnalysisColumn {
+  const _CsvAnalysisColumn({required this.key, required this.header});
+
+  final String key;
+  final String header;
+}
+
+enum _HistorySort { dateDesc, dateAsc, nameAsc, nameDesc }
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.onGoScan});
@@ -668,10 +890,15 @@ class _EmptyState extends StatelessWidget {
             children: [
               Icon(Icons.auto_graph, size: 40, color: AppTheme.muted),
               const SizedBox(height: 12),
-              Text('No scans yet', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'No scans yet',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 6),
-              Text('Capture your first scan from the Scan tab.',
-                  style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                'Capture your first scan from the Scan tab.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ],
           ),
         ),

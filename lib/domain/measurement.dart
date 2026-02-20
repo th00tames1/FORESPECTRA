@@ -15,7 +15,9 @@ class Measurement {
     this.latitude,
     this.longitude,
     this.modelId,
+    this.modelIdsJson,
     this.resultsJson,
+    this.analysisSummary,
   });
 
   final String id;
@@ -28,7 +30,9 @@ class Measurement {
   final double? latitude;
   final double? longitude;
   final String? modelId;
+  final String? modelIdsJson;
   final String? resultsJson;
+  final String? analysisSummary;
 }
 
 class SpectrumBlob {

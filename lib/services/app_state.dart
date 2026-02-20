@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:uuid/uuid.dart';
 
@@ -50,6 +50,10 @@ class AppState extends ChangeNotifier {
     '192.168.137.2',
   ];
   static final RegExp _ipv4Pattern = RegExp(r'^\d{1,3}(\.\d{1,3}){3}$');
+  static const List<String> _bundledModelAssetPaths = [
+    'assets/models/species_model.json',
+    'assets/models/moisture_model.json',
+  ];
 
   final SiNirClient client = SiNirClient();
   final DataStore dataStore = DataStore();
@@ -94,15 +98,21 @@ class AppState extends ChangeNotifier {
 
   Spectrum? latestSpectrum;
   Spectrum? backgroundSpectrum;
-  CalibrationModel? currentModel;
-  AnalysisResult? lastResult;
+  List<CalibrationModel> availableModels = const [];
+  Set<String> selectedModelIds = <String>{};
+  List<AnalysisResult> latestAnalysisResults = const [];
 
   Future<void> initialize() async {
     await dataStore.init();
     await _loadKnownDevices();
+    await _loadBundledModels(notify: false);
+    notifyListeners();
   }
 
-  Future<void> connect({String? preferredIp, bool fallbackToKnown = false}) async {
+  Future<void> connect({
+    String? preferredIp,
+    bool fallbackToKnown = false,
+  }) async {
     _cancelDiscovery(notify: false);
     isConnecting = true;
     statusMessage = 'Connecting...';
@@ -133,11 +143,7 @@ class AppState extends ChangeNotifier {
           setTab(0);
           _startConnectDelay();
           _registerDiscoveredSensor(
-            DiscoveredSensor(
-              ip: ip,
-              verified: true,
-              fromHistory: true,
-            ),
+            DiscoveredSensor(ip: ip, verified: true, fromHistory: true),
             notify: false,
           );
           isConnecting = false;
@@ -197,7 +203,11 @@ class AppState extends ChangeNotifier {
         final id = (await client.readModuleId(timeout: idTimeout)).trim();
         moduleId = id.isEmpty ? null : id;
         if (moduleId != null) {
-          await dataStore.upsertDevice(id: moduleId!, name: 'Si-NIR', ip: currentIp);
+          await dataStore.upsertDevice(
+            id: moduleId!,
+            name: 'Si-NIR',
+            ip: currentIp,
+          );
           await _refreshKnownIps();
           _registerDiscoveredSensor(
             DiscoveredSensor(
@@ -307,7 +317,8 @@ class AppState extends ChangeNotifier {
           }
 
           final existing = foundByIp[ip];
-          final shouldReplace = existing == null ||
+          final shouldReplace =
+              existing == null ||
               (!existing.verified && probed.verified) ||
               (existing.moduleId == null && probed.moduleId != null);
 
@@ -327,7 +338,9 @@ class AppState extends ChangeNotifier {
       }
 
       discoveredSensors = _sortedSensors(foundByIp.values.toList());
-      final newCount = discoveredSensors.where((sensor) => !sensor.fromHistory).length;
+      final newCount = discoveredSensors
+          .where((sensor) => !sensor.fromHistory)
+          .length;
       statusMessage = newCount == 0
           ? 'No new devices found. Select a known IP.'
           : 'Found $newCount device(s). Select one to connect.';
@@ -400,6 +413,7 @@ class AppState extends ChangeNotifier {
         scanParams,
         timeout: const Duration(seconds: 20),
       );
+      _runSelectedModelAnalysis(notify: false);
       statusMessage = 'Ready to Scan';
       captureCount += 1;
     } catch (error) {
@@ -419,6 +433,7 @@ class AppState extends ChangeNotifier {
         scanParams,
         timeout: const Duration(seconds: 20),
       );
+      _runSelectedModelAnalysis(notify: false);
       statusMessage = 'PSD ready';
     } catch (error) {
       statusMessage = 'PSD failed: $error';
@@ -426,23 +441,32 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> importModel() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['json'],
-    );
-    if (result == null || result.files.single.bytes == null) {
-      return;
+  List<CalibrationModel> get selectedModels {
+    return availableModels
+        .where((model) => selectedModelIds.contains(model.id))
+        .toList(growable: false);
+  }
+
+  bool isModelSelected(String modelId) => selectedModelIds.contains(modelId);
+
+  void setSelectedModelIds(Set<String> modelIds) {
+    selectedModelIds = Set<String>.from(modelIds);
+    _runSelectedModelAnalysis(notify: false);
+    notifyListeners();
+  }
+
+  void toggleModelSelection(String modelId, bool isSelected) {
+    if (isSelected) {
+      selectedModelIds.add(modelId);
+    } else {
+      selectedModelIds.remove(modelId);
     }
-    final jsonText = utf8.decode(result.files.single.bytes!);
-    currentModel = CalibrationModel.fromJson(jsonText);
-    await dataStore.saveModel(id: currentModel!.id, name: currentModel!.name, json: jsonText);
+    _runSelectedModelAnalysis(notify: false);
     notifyListeners();
   }
 
   Future<void> analyze() async {
-    if (latestSpectrum == null || currentModel == null) return;
-    lastResult = runAnalysis(latestSpectrum!, currentModel!);
+    _runSelectedModelAnalysis(notify: false);
     notifyListeners();
   }
 
@@ -450,6 +474,22 @@ class AppState extends ChangeNotifier {
     if (latestSpectrum == null) return;
     final measurementId = _uuid.v4();
     final position = await locationService.getCurrentPosition();
+    final selectedResults = latestAnalysisResults;
+    final selectedModelIdsOrdered = selectedResults
+        .map((result) => result.modelId)
+        .toList(growable: false);
+    final resultPayload = selectedResults.isEmpty
+        ? null
+        : {
+            'analyses': selectedResults
+                .map((result) => result.toJson())
+                .toList(),
+            'summary': _buildAnalysisSummary(selectedResults),
+          };
+    final summary = resultPayload == null
+        ? null
+        : resultPayload['summary'] as String;
+
     final measurement = Measurement(
       id: measurementId,
       timestamp: DateTime.now(),
@@ -466,8 +506,14 @@ class AppState extends ChangeNotifier {
       sampleName: sampleName.trim().isEmpty ? null : sampleName.trim(),
       latitude: position?.latitude,
       longitude: position?.longitude,
-      modelId: currentModel?.id,
-      resultsJson: lastResult == null ? null : jsonEncode(lastResult!.toJson()),
+      modelId: selectedModelIdsOrdered.isEmpty
+          ? null
+          : selectedModelIdsOrdered.first,
+      modelIdsJson: selectedModelIdsOrdered.isEmpty
+          ? null
+          : jsonEncode(selectedModelIdsOrdered),
+      resultsJson: resultPayload == null ? null : jsonEncode(resultPayload),
+      analysisSummary: summary,
     );
 
     final spectrumId = _uuid.v4();
@@ -488,9 +534,73 @@ class AppState extends ChangeNotifier {
 
   void discardLatest() {
     latestSpectrum = null;
-    lastResult = null;
+    latestAnalysisResults = const [];
     statusMessage = 'Scan discarded';
     notifyListeners();
+  }
+
+  Future<void> _loadBundledModels({bool notify = true}) async {
+    try {
+      final parsed = <CalibrationModel>[];
+      for (final assetPath in _bundledModelAssetPaths) {
+        try {
+          final jsonText = await rootBundle.loadString(assetPath);
+          parsed.add(CalibrationModel.fromJson(jsonText));
+        } catch (_) {
+          // Ignore invalid bundled model payloads.
+        }
+      }
+
+      availableModels = parsed;
+      final availableIds = parsed.map((model) => model.id).toSet();
+      selectedModelIds = selectedModelIds.where(availableIds.contains).toSet();
+      _runSelectedModelAnalysis(notify: false);
+    } catch (_) {
+      availableModels = const [];
+      selectedModelIds = <String>{};
+      latestAnalysisResults = const [];
+    }
+
+    if (notify) {
+      notifyListeners();
+    }
+  }
+
+  void _runSelectedModelAnalysis({bool notify = true}) {
+    final spectrum = latestSpectrum;
+    if (spectrum == null ||
+        selectedModelIds.isEmpty ||
+        availableModels.isEmpty) {
+      latestAnalysisResults = const [];
+      if (notify) {
+        notifyListeners();
+      }
+      return;
+    }
+
+    final outputs = <AnalysisResult>[];
+    for (final model in availableModels) {
+      if (!selectedModelIds.contains(model.id)) {
+        continue;
+      }
+      try {
+        outputs.add(runAnalysis(spectrum, model));
+      } catch (_) {
+        // Ignore model failures for this scan.
+      }
+    }
+
+    latestAnalysisResults = outputs;
+    if (notify) {
+      notifyListeners();
+    }
+  }
+
+  String _buildAnalysisSummary(List<AnalysisResult> results) {
+    if (results.isEmpty) {
+      return '';
+    }
+    return results.map((result) => result.summary).join(', ');
   }
 
   Future<void> requestStoragePermission() async {
@@ -572,7 +682,9 @@ class AppState extends ChangeNotifier {
         t2c2: t2c2,
         t2max: t2max,
       );
-      statusMessage = status == 0 ? 'Source settings applied' : 'Source error $status';
+      statusMessage = status == 0
+          ? 'Source settings applied'
+          : 'Source error $status';
     } catch (error) {
       statusMessage = 'Source settings failed: $error';
     }
@@ -585,7 +697,9 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     try {
       final status = await client.setOpticalSettings(opticalGainValue);
-      statusMessage = status == 0 ? 'Optical gain applied' : 'Optical gain error $status';
+      statusMessage = status == 0
+          ? 'Optical gain applied'
+          : 'Optical gain error $status';
     } catch (error) {
       statusMessage = 'Optical gain failed: $error';
     }
@@ -603,11 +717,8 @@ class AppState extends ChangeNotifier {
     discoveredSensors = _sortedSensors(
       knownIps
           .map(
-            (ip) => DiscoveredSensor(
-              ip: ip,
-              verified: false,
-              fromHistory: true,
-            ),
+            (ip) =>
+                DiscoveredSensor(ip: ip, verified: false, fromHistory: true),
           )
           .toList(),
     );
@@ -688,7 +799,10 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  void _registerDiscoveredSensor(DiscoveredSensor sensor, {bool notify = true}) {
+  void _registerDiscoveredSensor(
+    DiscoveredSensor sensor, {
+    bool notify = true,
+  }) {
     final byIp = <String, DiscoveredSensor>{
       for (final item in discoveredSensors) item.ip: item,
     };

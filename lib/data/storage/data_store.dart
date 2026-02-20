@@ -7,6 +7,20 @@ import 'package:sqflite/sqflite.dart';
 
 import '../../domain/measurement.dart';
 
+class StoredModel {
+  const StoredModel({
+    required this.id,
+    required this.name,
+    required this.json,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String name;
+  final String json;
+  final DateTime createdAt;
+}
+
 class DataStore {
   Database? _db;
 
@@ -15,7 +29,7 @@ class DataStore {
     final path = p.join(dir.path, 'spectra.db');
     _db = await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE devices(
@@ -45,7 +59,9 @@ class DataStore {
             lat REAL,
             lon REAL,
             model_id TEXT,
-            results_json TEXT
+            model_ids_json TEXT,
+            results_json TEXT,
+            analysis_summary TEXT
           );
         ''');
         await db.execute('''
@@ -61,8 +77,28 @@ class DataStore {
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
-          await db.execute('ALTER TABLE measurements ADD COLUMN material_name TEXT');
-          await db.execute('ALTER TABLE measurements ADD COLUMN sample_name TEXT');
+          try {
+            await db.execute(
+              'ALTER TABLE measurements ADD COLUMN material_name TEXT',
+            );
+          } catch (_) {}
+          try {
+            await db.execute(
+              'ALTER TABLE measurements ADD COLUMN sample_name TEXT',
+            );
+          } catch (_) {}
+        }
+        if (oldVersion < 3) {
+          try {
+            await db.execute(
+              'ALTER TABLE measurements ADD COLUMN model_ids_json TEXT',
+            );
+          } catch (_) {}
+          try {
+            await db.execute(
+              'ALTER TABLE measurements ADD COLUMN analysis_summary TEXT',
+            );
+          } catch (_) {}
         }
       },
     );
@@ -81,16 +117,12 @@ class DataStore {
     required String name,
     required String ip,
   }) async {
-    await _database.insert(
-      'devices',
-      {
-        'id': id,
-        'name': name,
-        'ip': ip,
-        'last_seen': DateTime.now().millisecondsSinceEpoch,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await _database.insert('devices', {
+      'id': id,
+      'name': name,
+      'ip': ip,
+      'last_seen': DateTime.now().millisecondsSinceEpoch,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<String>> listRecentDeviceIps({int limit = 12}) async {
@@ -118,55 +150,63 @@ class DataStore {
     required String name,
     required String json,
   }) async {
-    await _database.insert(
-      'models',
-      {
-        'id': id,
-        'name': name,
-        'json': json,
-        'created_at': DateTime.now().millisecondsSinceEpoch,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await _database.insert('models', {
+      'id': id,
+      'name': name,
+      'json': json,
+      'created_at': DateTime.now().millisecondsSinceEpoch,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<StoredModel>> listModels() async {
+    final rows = await _database.query('models', orderBy: 'created_at DESC');
+    return rows
+        .map((row) {
+          final createdAtRaw = row['created_at'] as int?;
+          return StoredModel(
+            id: row['id'] as String,
+            name: (row['name'] as String?) ?? 'Model',
+            json: row['json'] as String,
+            createdAt: DateTime.fromMillisecondsSinceEpoch(createdAtRaw ?? 0),
+          );
+        })
+        .toList(growable: false);
   }
 
   Future<void> saveMeasurement(Measurement measurement) async {
-    await _database.insert(
-      'measurements',
-      {
-        'id': measurement.id,
-        'device_id': measurement.deviceId,
-        'timestamp': measurement.timestamp.millisecondsSinceEpoch,
-        'scan_time_ms': measurement.scanTimeMs,
-        'params_json': measurement.paramsJson,
-        'material_name': measurement.materialName,
-        'sample_name': measurement.sampleName,
-        'lat': measurement.latitude,
-        'lon': measurement.longitude,
-        'model_id': measurement.modelId,
-        'results_json': measurement.resultsJson,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await _database.insert('measurements', {
+      'id': measurement.id,
+      'device_id': measurement.deviceId,
+      'timestamp': measurement.timestamp.millisecondsSinceEpoch,
+      'scan_time_ms': measurement.scanTimeMs,
+      'params_json': measurement.paramsJson,
+      'material_name': measurement.materialName,
+      'sample_name': measurement.sampleName,
+      'lat': measurement.latitude,
+      'lon': measurement.longitude,
+      'model_id': measurement.modelId,
+      'model_ids_json': measurement.modelIdsJson,
+      'results_json': measurement.resultsJson,
+      'analysis_summary': measurement.analysisSummary,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<void> saveSpectrum(SpectrumBlob blob) async {
-    await _database.insert(
-      'spectra',
-      {
-        'id': blob.id,
-        'measurement_id': blob.measurementId,
-        'kind': blob.kind,
-        'length': blob.length,
-        'x_blob': blob.xBytes,
-        'y_blob': blob.yBytes,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await _database.insert('spectra', {
+      'id': blob.id,
+      'measurement_id': blob.measurementId,
+      'kind': blob.kind,
+      'length': blob.length,
+      'x_blob': blob.xBytes,
+      'y_blob': blob.yBytes,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<Measurement>> listMeasurements() async {
-    final rows = await _database.query('measurements', orderBy: 'timestamp DESC');
+    final rows = await _database.query(
+      'measurements',
+      orderBy: 'timestamp DESC',
+    );
     return rows.map(_measurementFromRow).toList();
   }
 
@@ -188,12 +228,13 @@ class DataStore {
     }).toList();
   }
 
-  Future<void> renameMeasurementSampleName(String measurementId, String sampleName) async {
+  Future<void> renameMeasurementSampleName(
+    String measurementId,
+    String sampleName,
+  ) async {
     await _database.update(
       'measurements',
-      {
-        'sample_name': sampleName.trim().isEmpty ? null : sampleName.trim(),
-      },
+      {'sample_name': sampleName.trim().isEmpty ? null : sampleName.trim()},
       where: 'id = ?',
       whereArgs: [measurementId],
     );
@@ -213,7 +254,11 @@ class DataStore {
   }
 
   Future<String?> getModelJson(String modelId) async {
-    final rows = await _database.query('models', where: 'id = ?', whereArgs: [modelId]);
+    final rows = await _database.query(
+      'models',
+      where: 'id = ?',
+      whereArgs: [modelId],
+    );
     if (rows.isEmpty) {
       return null;
     }
@@ -232,7 +277,9 @@ class DataStore {
       latitude: row['lat'] as double?,
       longitude: row['lon'] as double?,
       modelId: row['model_id'] as String?,
+      modelIdsJson: row['model_ids_json'] as String?,
       resultsJson: row['results_json'] as String?,
+      analysisSummary: row['analysis_summary'] as String?,
     );
   }
 
