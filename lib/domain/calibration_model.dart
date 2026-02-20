@@ -18,6 +18,7 @@ class CalibrationModel {
     this.threshold,
     this.positiveClassIndex,
     this.classes = const [],
+    this.axisUnit = '',
   });
 
   final String id;
@@ -35,6 +36,7 @@ class CalibrationModel {
   final double? threshold;
   final int? positiveClassIndex;
   final List<String> classes;
+  final String axisUnit;
 
   bool get isClassification => modelType == 'pls_da_binary';
 
@@ -79,6 +81,7 @@ class CalibrationModel {
       threshold: null,
       positiveClassIndex: null,
       classes: const [],
+      axisUnit: '',
     );
   }
 
@@ -101,6 +104,11 @@ class CalibrationModel {
     final modelType = (jsonMap['model_type'] as String? ?? 'linear').trim();
     final target = (jsonMap['target'] as String?)?.trim();
     final rawLabel = (jsonMap['label'] as String?)?.trim();
+    final axisUnit =
+        (jsonMap['axis_unit'] as String? ??
+                jsonMap['x_axis_unit'] as String? ??
+                '')
+            .trim();
 
     final label = rawLabel != null && rawLabel.isNotEmpty
         ? rawLabel
@@ -172,6 +180,7 @@ class CalibrationModel {
       threshold: (jsonMap['threshold'] as num?)?.toDouble(),
       positiveClassIndex: (jsonMap['positive_class_index'] as num?)?.toInt(),
       classes: classes,
+      axisUnit: axisUnit,
     );
   }
 
@@ -192,6 +201,7 @@ class CalibrationModel {
       'threshold': threshold,
       'positiveClassIndex': positiveClassIndex,
       'classes': classes,
+      'axisUnit': axisUnit,
     };
   }
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:permission_handler/permission_handler.dart';
@@ -42,7 +43,7 @@ class DiscoveredSensor {
   }
 }
 
-class AppState extends ChangeNotifier {
+class AppState extends ChangeNotifier with WidgetsBindingObserver {
   static const List<String> _defaultKnownIps = [
     '10.92.71.8',
     '10.13.199.8',
@@ -84,6 +85,10 @@ class AppState extends ChangeNotifier {
   int sensorPickerPromptSignal = 0;
   int _discoveryRunId = 0;
   Completer<void>? _activeDiscoveryCompletion;
+  final Set<String> _referenceReadyIps = <String>{};
+  bool _reconnectOnResume = false;
+  bool _isLifecycleDisconnecting = false;
+  bool _disposed = false;
 
   int lampsCount = 2;
   int lampSelect = 0;
@@ -103,10 +108,75 @@ class AppState extends ChangeNotifier {
   List<AnalysisResult> latestAnalysisResults = const [];
 
   Future<void> initialize() async {
+    WidgetsBinding.instance.addObserver(this);
     await dataStore.init();
     await _loadKnownDevices();
     await _loadBundledModels(notify: false);
     notifyListeners();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_disposed) {
+      return;
+    }
+
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      if (isConnected || isConnecting || isVerifyingConnection) {
+        _reconnectOnResume = true;
+        unawaited(_disconnectForLifecycle());
+      }
+      return;
+    }
+
+    if (state == AppLifecycleState.resumed && _reconnectOnResume) {
+      _reconnectOnResume = false;
+      unawaited(_reconnectAfterResume());
+    }
+  }
+
+  Future<void> _disconnectForLifecycle() async {
+    if (_isLifecycleDisconnecting || _disposed) {
+      return;
+    }
+    _isLifecycleDisconnecting = true;
+
+    _connectDelayTimer?.cancel();
+    _cancelDiscovery(notify: false);
+    try {
+      await client.disconnect();
+    } catch (_) {
+      // Best-effort close only.
+    }
+
+    isConnected = false;
+    isConnecting = false;
+    isVerifyingConnection = false;
+    isBackgrounding = false;
+    isScanning = false;
+    _syncReferenceFromCurrentIp();
+    showConnectScreen = true;
+    statusMessage = 'Paused. Reconnecting when app resumes...';
+
+    _isLifecycleDisconnecting = false;
+    if (!_disposed) {
+      notifyListeners();
+    }
+  }
+
+  Future<void> _reconnectAfterResume() async {
+    if (_disposed || _isLifecycleDisconnecting) {
+      return;
+    }
+    if (currentIp.trim().isEmpty) {
+      return;
+    }
+
+    statusMessage = 'Reconnecting to sensor...';
+    notifyListeners();
+    await connect(preferredIp: currentIp, fallbackToKnown: true);
   }
 
   Future<void> connect({
@@ -134,7 +204,7 @@ class AppState extends ChangeNotifier {
           await client.connect(ip, timeout: const Duration(seconds: 4));
           isConnected = true;
           currentIp = ip;
-          hasBackground = false;
+          _syncReferenceFromCurrentIp();
           backgroundSpectrum = null;
           latestSpectrum = null;
           _cancelDiscovery(notify: false);
@@ -146,6 +216,7 @@ class AppState extends ChangeNotifier {
             DiscoveredSensor(ip: ip, verified: true, fromHistory: true),
             notify: false,
           );
+          _reconnectOnResume = false;
           isConnecting = false;
           notifyListeners();
           unawaited(_verifyDevice());
@@ -229,12 +300,13 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
+    _reconnectOnResume = false;
     _connectDelayTimer?.cancel();
     _cancelDiscovery(notify: false);
     await client.disconnect();
     isConnected = false;
     isVerifyingConnection = false;
-    hasBackground = false;
+    _syncReferenceFromCurrentIp();
     isBackgrounding = false;
     isScanning = false;
     showConnectScreen = true;
@@ -249,6 +321,7 @@ class AppState extends ChangeNotifier {
       return;
     }
     currentIp = ip;
+    _syncReferenceFromCurrentIp();
     _registerDiscoveredSensor(
       DiscoveredSensor(ip: ip, verified: false, fromHistory: true),
       notify: false,
@@ -378,19 +451,25 @@ class AppState extends ChangeNotifier {
         timeout: const Duration(seconds: 20),
       );
       if (status == 0) {
-        hasBackground = true;
+        _rememberReferenceForCurrentIp(true);
         statusMessage = 'Reference captured';
       } else {
-        hasBackground = false;
+        _rememberReferenceForCurrentIp(false);
         statusMessage = 'Background error $status';
       }
     } catch (error) {
-      hasBackground = false;
-      if (error is TimeoutException) {
-        statusMessage =
-            'Background timeout. Check sensor power adapter/cable and try again.';
-      } else {
-        statusMessage = 'Background failed: $error';
+      _rememberReferenceForCurrentIp(false);
+      final lost = await _handleConnectionLossIfNeeded(
+        error,
+        actionLabel: 'Background',
+      );
+      if (!lost) {
+        if (error is TimeoutException) {
+          statusMessage =
+              'Background timeout. Check sensor power adapter/cable and try again.';
+        } else {
+          statusMessage = 'Background failed: $error';
+        }
       }
     } finally {
       isBackgrounding = false;
@@ -417,7 +496,18 @@ class AppState extends ChangeNotifier {
       statusMessage = 'Ready to Scan';
       captureCount += 1;
     } catch (error) {
-      statusMessage = 'Spectrum failed: $error';
+      final lost = await _handleConnectionLossIfNeeded(
+        error,
+        actionLabel: 'Spectrum',
+      );
+      if (!lost) {
+        if (_isLikelyMissingReferenceError(error)) {
+          _rememberReferenceForCurrentIp(false);
+          statusMessage = 'Reference required. Tap Set reference.';
+        } else {
+          statusMessage = 'Spectrum failed: $error';
+        }
+      }
     } finally {
       isScanning = false;
     }
@@ -436,7 +526,13 @@ class AppState extends ChangeNotifier {
       _runSelectedModelAnalysis(notify: false);
       statusMessage = 'PSD ready';
     } catch (error) {
-      statusMessage = 'PSD failed: $error';
+      final lost = await _handleConnectionLossIfNeeded(
+        error,
+        actionLabel: 'PSD',
+      );
+      if (!lost) {
+        statusMessage = 'PSD failed: $error';
+      }
     }
     notifyListeners();
   }
@@ -603,6 +699,68 @@ class AppState extends ChangeNotifier {
     return results.map((result) => result.summary).join(', ');
   }
 
+  Future<bool> _handleConnectionLossIfNeeded(
+    Object error, {
+    required String actionLabel,
+  }) async {
+    if (!_isLikelyConnectionError(error)) {
+      return false;
+    }
+
+    _reconnectOnResume = false;
+    try {
+      await client.disconnect();
+    } catch (_) {
+      // Best-effort close only.
+    }
+
+    isConnected = false;
+    isConnecting = false;
+    isVerifyingConnection = false;
+    _syncReferenceFromCurrentIp();
+    showConnectScreen = true;
+    statusMessage = '$actionLabel failed: connection lost. Please reconnect.';
+    return true;
+  }
+
+  bool _isLikelyConnectionError(Object error) {
+    if (error is SocketException) {
+      return true;
+    }
+    final text = error.toString().toLowerCase();
+    return text.contains('not connected') ||
+        text.contains('connection reset') ||
+        text.contains('broken pipe') ||
+        text.contains('socket') ||
+        text.contains('connection aborted');
+  }
+
+  bool _isLikelyMissingReferenceError(Object error) {
+    final text = error.toString().toLowerCase();
+    return text.contains('device returned status');
+  }
+
+  void _rememberReferenceForCurrentIp(bool ready) {
+    final ip = currentIp.trim();
+    if (ip.isNotEmpty) {
+      if (ready) {
+        _referenceReadyIps.add(ip);
+      } else {
+        _referenceReadyIps.remove(ip);
+      }
+    }
+    hasBackground = ready;
+  }
+
+  void _syncReferenceFromCurrentIp() {
+    final ip = currentIp.trim();
+    if (ip.isEmpty) {
+      hasBackground = false;
+      return;
+    }
+    hasBackground = _referenceReadyIps.contains(ip);
+  }
+
   Future<void> requestStoragePermission() async {
     await Permission.storage.request();
   }
@@ -714,6 +872,7 @@ class AppState extends ChangeNotifier {
     }
 
     currentIp = knownIps.first;
+    _syncReferenceFromCurrentIp();
     discoveredSensors = _sortedSensors(
       knownIps
           .map(
@@ -913,5 +1072,14 @@ class AppState extends ChangeNotifier {
     } catch (_) {
       // Best-effort wait only.
     }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    WidgetsBinding.instance.removeObserver(this);
+    _connectDelayTimer?.cancel();
+    unawaited(client.disconnect());
+    super.dispose();
   }
 }

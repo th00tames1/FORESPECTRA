@@ -128,7 +128,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                   final analyses = _decodeAnalyses(
                                     item.resultsJson,
                                   );
-                                  final summary = _analysisSummary(analyses);
                                   return Card(
                                     child: Padding(
                                       padding: const EdgeInsets.all(4),
@@ -146,15 +145,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                             ),
                                             subtitle: Text(
                                               '${item.materialName ?? 'Unknown material'} • ${item.timestamp}',
-                                            ),
-                                            trailing: SizedBox(
-                                              width: 120,
-                                              child: Text(
-                                                summary,
-                                                textAlign: TextAlign.right,
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
                                             ),
                                             onLongPress: () =>
                                                 _showItemActions(item),

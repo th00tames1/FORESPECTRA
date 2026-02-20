@@ -39,7 +39,7 @@ class AnalysisResult {
 }
 
 AnalysisResult runAnalysis(Spectrum spectrum, CalibrationModel model) {
-  var processed = spectrum;
+  var processed = _alignSpectrumAxisForModel(spectrum, model);
   if (model.xAxis.isNotEmpty && model.xAxis.length == model.expectedLength) {
     processed = resampleSpectrum(processed, model.xAxis);
   }
@@ -109,6 +109,46 @@ Spectrum resampleSpectrum(Spectrum spectrum, List<double> targetX) {
     x: Float64List.fromList(targetX),
     y: Float64List.fromList(newY),
   );
+}
+
+Spectrum _alignSpectrumAxisForModel(Spectrum spectrum, CalibrationModel model) {
+  final sorted = _sortSpectrumByX(spectrum);
+  if (model.xAxis.isEmpty || sorted.length < 2) {
+    return sorted;
+  }
+
+  final sourceMin = sorted.x.first;
+  final sourceMax = sorted.x.last;
+  final targetMin = model.xAxis.reduce(min);
+  final targetMax = model.xAxis.reduce(max);
+  final sourceMid = (sourceMin + sourceMax) / 2.0;
+  final targetMid = (targetMin + targetMax) / 2.0;
+
+  final axisUnit = model.axisUnit.toLowerCase();
+  final targetLooksNm = targetMax < 3000;
+  final shouldConvertCmInvToNm =
+      axisUnit == 'nm' ||
+      axisUnit == 'nanometer' ||
+      axisUnit == 'nanometers' ||
+      (axisUnit.isEmpty &&
+          targetLooksNm &&
+          sourceMid > 3000 &&
+          targetMid < 3000);
+
+  if (!shouldConvertCmInvToNm) {
+    return sorted;
+  }
+
+  final convertedX = Float64List(sorted.length);
+  for (var i = 0; i < sorted.length; i++) {
+    final x = sorted.x[i];
+    if (!x.isFinite || x <= 0) {
+      return sorted;
+    }
+    convertedX[i] = 10000000.0 / x;
+  }
+
+  return _sortSpectrumByX(Spectrum(x: convertedX, y: sorted.y));
 }
 
 Spectrum applyStandardScaling(
