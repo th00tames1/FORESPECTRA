@@ -233,5 +233,12 @@ String _humanizeClassLabel(String raw) {
       .replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
-  return spaced;
+  final cleaned = spaced.replaceAll('?', '').trim();
+  if (cleaned == 'Cherry Laurel') {
+    return 'Laurel';
+  }
+  if (cleaned == 'Pacific Rhododendron') {
+    return 'Rhododendron';
+  }
+  return cleaned;
 }
