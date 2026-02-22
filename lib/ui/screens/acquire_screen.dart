@@ -62,26 +62,50 @@ class _AcquireScreenState extends State<AcquireScreen> {
           ),
           body: SafeArea(
             bottom: true,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-              child: AnimatedPadding(
-                duration: const Duration(milliseconds: 160),
-                padding: EdgeInsets.only(bottom: keyboardInset),
-                child: SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  child: _buildContent(
-                    context,
-                    state,
-                    buttonSize,
-                    canScanTap,
-                    canCapture,
-                    isBusy,
-                    statusColor,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isTabletLayout = constraints.maxWidth >= 720;
+                final useSpreadLayout = isTabletLayout && keyboardInset == 0;
+                final contentAlignment = Alignment.topCenter;
+                final contentMaxWidth = isTabletLayout ? 640.0 : double.infinity;
+                const outerVerticalPadding = 40.0;
+                final availableHeight =
+                    constraints.maxHeight - keyboardInset - outerVerticalPadding;
+                final minHeight = availableHeight > 0 ? availableHeight : 0.0;
+
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                  child: AnimatedPadding(
+                    duration: const Duration(milliseconds: 160),
+                    padding: EdgeInsets.only(bottom: keyboardInset),
+                    child: SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(),
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minHeight: minHeight),
+                        child: Align(
+                          alignment: contentAlignment,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(maxWidth: contentMaxWidth),
+                            child: _buildContent(
+                              context,
+                              state,
+                              buttonSize,
+                              canScanTap,
+                              canCapture,
+                              isBusy,
+                              statusColor,
+                              useSpreadLayout,
+                              minHeight,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
         );
@@ -97,8 +121,10 @@ class _AcquireScreenState extends State<AcquireScreen> {
     bool canCapture,
     bool isBusy,
     Color statusColor,
+    bool useSpreadLayout,
+    double availableHeight,
   ) {
-    return Column(
+    final topSection = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Scan', style: Theme.of(context).textTheme.headlineMedium),
@@ -111,16 +137,16 @@ class _AcquireScreenState extends State<AcquireScreen> {
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
-            onPressed: state.isConnected && !isBusy
-                ? state.runBackground
-                : null,
+            onPressed: state.isConnected && !isBusy ? state.runBackground : null,
             icon: const Icon(Icons.layers),
-            label: Text(
-              state.hasBackground ? 'Reference set' : 'Set reference',
-            ),
+            label: Text(state.hasBackground ? 'Reference set' : 'Set reference'),
           ),
         ),
-        const SizedBox(height: 18),
+      ],
+    );
+
+    final middleSection = Column(
+      children: [
         Center(
           child: GestureDetector(
             onTap: canScanTap ? () => _handleScanTap(context, state) : null,
@@ -134,9 +160,7 @@ class _AcquireScreenState extends State<AcquireScreen> {
                 border: Border.all(
                   color: canCapture
                       ? AppTheme.accent
-                      : Theme.of(
-                          context,
-                        ).colorScheme.outline.withValues(alpha: 0.6),
+                      : Theme.of(context).colorScheme.outline.withValues(alpha: 0.6),
                   width: 2.5,
                 ),
                 boxShadow: canCapture
@@ -163,11 +187,10 @@ class _AcquireScreenState extends State<AcquireScreen> {
                       const SizedBox(height: 10),
                       Text(
                         state.isScanning ? 'SCANNING...' : 'SCAN',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              letterSpacing: 1.2,
-                              color: canCapture ? Colors.white : null,
-                            ),
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          letterSpacing: 1.2,
+                          color: canCapture ? Colors.white : null,
+                        ),
                       ),
                     ],
                   ),
@@ -188,17 +211,16 @@ class _AcquireScreenState extends State<AcquireScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        if (state.hasBackground) ...[
-          Center(
-            child: Text(
-              'Reference ready for spectrum capture.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AppTheme.muted),
-            ),
+        if (state.hasBackground)
+          Text(
+            'Reference ready for spectrum capture.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppTheme.muted),
           ),
-          const SizedBox(height: 16),
-        ],
+      ],
+    );
+
+    final bottomSection = Column(
+      children: [
         Row(
           children: [
             Expanded(
@@ -209,10 +231,7 @@ class _AcquireScreenState extends State<AcquireScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Material name',
                   hintText: 'e.g. Pine',
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
                 onChanged: state.updateMaterialName,
               ),
@@ -225,10 +244,7 @@ class _AcquireScreenState extends State<AcquireScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Sample name',
                   hintText: 'e.g. Sample A',
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
                 onChanged: state.updateSampleName,
               ),
@@ -256,6 +272,33 @@ class _AcquireScreenState extends State<AcquireScreen> {
             ),
           ),
         ),
+      ],
+    );
+
+    if (useSpreadLayout) {
+      final upperGap = (availableHeight * 0.08).clamp(20.0, 44.0);
+      final lowerGap = (availableHeight * 0.06).clamp(16.0, 34.0);
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          topSection,
+          SizedBox(height: upperGap),
+          middleSection,
+          SizedBox(height: lowerGap),
+          bottomSection,
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        topSection,
+        const SizedBox(height: 18),
+        middleSection,
+        const SizedBox(height: 16),
+        bottomSection,
       ],
     );
   }
