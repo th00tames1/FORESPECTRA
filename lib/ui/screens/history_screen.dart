@@ -63,11 +63,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         'History',
                         style: Theme.of(context).textTheme.headlineMedium,
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Review your recent scans.',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
                       const SizedBox(height: 12),
                       TextField(
                         decoration: const InputDecoration(

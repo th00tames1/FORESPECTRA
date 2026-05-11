@@ -73,7 +73,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   bool isScanning = false;
   int captureCount = 0;
   int currentTab = 0;
-  ThemeMode themeMode = ThemeMode.dark;
+  ThemeMode themeMode = ThemeMode.light;
   String spectrumAxisUnit = 'nm';
   bool showConnectScreen = true;
   Timer? _connectDelayTimer;

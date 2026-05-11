@@ -22,11 +22,6 @@ class SettingsScreen extends StatelessWidget {
                   'Config',
                   style: Theme.of(context).textTheme.headlineMedium,
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  'Control device and scan settings.',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
                 const SizedBox(height: 16),
                 Card(
                   child: Padding(

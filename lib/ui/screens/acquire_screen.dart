@@ -128,11 +128,6 @@ class _AcquireScreenState extends State<AcquireScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Scan', style: Theme.of(context).textTheme.headlineMedium),
-        const SizedBox(height: 6),
-        Text(
-          'Press Scan to capture spectrum.',
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
         const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,
@@ -214,12 +209,6 @@ class _AcquireScreenState extends State<AcquireScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        if (state.hasBackground)
-          Text(
-            'Reference ready for spectrum capture.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppTheme.muted),
-          ),
       ],
     );
 
@@ -280,8 +269,8 @@ class _AcquireScreenState extends State<AcquireScreen> {
     );
 
     if (useSpreadLayout) {
-      final upperGap = (availableHeight * 0.08).clamp(20.0, 44.0);
-      final lowerGap = (availableHeight * 0.06).clamp(16.0, 34.0);
+      final upperGap = (availableHeight * 0.10).clamp(36.0, 64.0);
+      final lowerGap = (availableHeight * 0.08).clamp(32.0, 56.0);
 
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -299,9 +288,9 @@ class _AcquireScreenState extends State<AcquireScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         topSection,
-        const SizedBox(height: 18),
+        const SizedBox(height: 36),
         middleSection,
-        const SizedBox(height: 16),
+        const SizedBox(height: 36),
         bottomSection,
       ],
     );

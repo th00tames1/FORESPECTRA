@@ -20,12 +20,9 @@ class _ConnectScreenState extends State<ConnectScreen> {
         final isConnecting = state.isConnecting;
         final isDiscovering = state.isDiscovering;
         final isOnline = isConnected && !isConnecting;
-        final ringColor = isOnline
-            ? AppTheme.success
-            : Colors.white.withValues(alpha: 0.25);
-        final fillColor = isOnline
-            ? AppTheme.success.withValues(alpha: 0.15)
-            : Colors.transparent;
+        final outlineColor = Theme.of(context).colorScheme.outline;
+        final ringColor = isOnline ? AppTheme.success : outlineColor;
+        final fillColor = isOnline ? Colors.white : Colors.transparent;
         final title = isConnected
             ? 'ONLINE'
             : isConnecting
@@ -357,72 +354,80 @@ class _SensorPickerSheetState extends State<_SensorPickerSheet> {
                 ),
                 const SizedBox(height: 12),
                 Expanded(
-                  child: sensors.isEmpty
-                      ? Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 14,
-                            horizontal: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.12),
+                  child: Builder(builder: (context) {
+                    final outlineColor =
+                        Theme.of(context).colorScheme.outline;
+                    final softSurface = Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest;
+                    return sensors.isEmpty
+                        ? Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 14,
+                              horizontal: 12,
                             ),
-                          ),
-                          child: Text(
-                            isBusy ? 'Searching...' : 'No devices found yet.',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: AppTheme.muted),
-                          ),
-                        )
-                      : Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.12),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: outlineColor),
                             ),
-                            color: Colors.white.withValues(alpha: 0.02),
-                          ),
-                          child: ListView.separated(
-                            itemCount: sensors.length,
-                            separatorBuilder: (_, __) => Divider(
-                              height: 1,
-                              color: Colors.white.withValues(alpha: 0.08),
+                            child: Text(
+                              isBusy
+                                  ? 'Searching...'
+                                  : 'No devices found yet.',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(color: AppTheme.muted),
                             ),
-                            itemBuilder: (context, index) {
-                              final sensor = sensors[index];
-                              final subtitleText = sensor.moduleId != null
-                                  ? 'Module ${sensor.moduleId}'
-                                  : sensor.fromHistory
-                                      ? 'Saved address'
-                                      : 'Reachable host';
-                              return ListTile(
-                                dense: true,
-                                leading: Icon(
-                                  sensor.verified
-                                      ? Icons.sensors_outlined
-                                      : Icons.history,
-                                  color: sensor.verified
-                                      ? Theme.of(context).colorScheme.primary
-                                      : AppTheme.muted,
-                                ),
-                                title: Text(sensor.ip),
-                                subtitle: Text(subtitleText),
-                                onTap: state.isConnecting
-                                    ? null
-                                    : () {
-                                        Navigator.pop(
-                                          context,
-                                          _SensorPickerAction.select(sensor),
-                                        );
-                                      },
-                              );
-                            },
-                          ),
-                        ),
+                          )
+                        : Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: outlineColor),
+                              color: softSurface,
+                            ),
+                            child: ListView.separated(
+                              itemCount: sensors.length,
+                              separatorBuilder: (_, __) => Divider(
+                                height: 1,
+                                color: outlineColor,
+                              ),
+                              itemBuilder: (context, index) {
+                                final sensor = sensors[index];
+                                final subtitleText = sensor.moduleId != null
+                                    ? 'Module ${sensor.moduleId}'
+                                    : sensor.fromHistory
+                                        ? 'Saved address'
+                                        : 'Reachable host';
+                                return ListTile(
+                                  dense: true,
+                                  leading: Icon(
+                                    sensor.verified
+                                        ? Icons.sensors_outlined
+                                        : Icons.history,
+                                    color: sensor.verified
+                                        ? Theme.of(context)
+                                            .colorScheme
+                                            .primary
+                                        : AppTheme.muted,
+                                  ),
+                                  title: Text(sensor.ip),
+                                  subtitle: Text(subtitleText),
+                                  onTap: state.isConnecting
+                                      ? null
+                                      : () {
+                                          Navigator.pop(
+                                            context,
+                                            _SensorPickerAction.select(
+                                                sensor),
+                                          );
+                                        },
+                                );
+                              },
+                            ),
+                          );
+                  }),
                 ),
                 const SizedBox(height: 12),
                 SizedBox(

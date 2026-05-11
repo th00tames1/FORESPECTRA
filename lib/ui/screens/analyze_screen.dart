@@ -18,9 +18,11 @@ class AnalyzeScreen extends StatelessWidget {
         final media = MediaQuery.of(context);
         final baseBottomPadding = fromScanFlow ? 24.0 : 96.0;
         final bottomInset = media.padding.bottom + baseBottomPadding;
-        return SafeArea(
-          bottom: true,
-          child: LayoutBuilder(
+        return Scaffold(
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          body: SafeArea(
+            bottom: true,
+            child: LayoutBuilder(
             builder: (context, constraints) {
               final isTabletLayout = constraints.maxWidth >= 720;
               final useSpreadLayout =
@@ -36,11 +38,6 @@ class AnalyzeScreen extends StatelessWidget {
                   Text(
                     'Results',
                     style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Turn your scan into a simple readout.',
-                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ],
               );
@@ -181,6 +178,7 @@ class AnalyzeScreen extends StatelessWidget {
                 ),
               );
             },
+            ),
           ),
         );
       },
