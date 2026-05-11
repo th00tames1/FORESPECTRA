@@ -10,6 +10,7 @@ import '../data/si_nir_client.dart';
 import '../data/si_nir_protocol.dart';
 import '../data/storage/data_store.dart';
 import '../domain/analyzer.dart';
+import '../domain/averaging.dart';
 import '../domain/calibration_model.dart';
 import '../domain/measurement.dart';
 import '../domain/spectrum.dart';
@@ -47,8 +48,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   static const List<String> _defaultKnownIps = [
     '10.92.71.8',
     '10.13.199.8',
-    '192.168.144.2',
-    '192.168.137.2',
   ];
   static final RegExp _ipv4Pattern = RegExp(r'^\d{1,3}(\.\d{1,3}){3}$');
   static const List<String> _bundledModelAssetPaths = [
@@ -68,6 +67,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   String? moduleId;
   String currentIp = '10.92.71.8';
   bool sendLengthPrefix = false;
+  bool showGhNhDiagnostics = false;
   bool hasBackground = false;
   bool isBackgrounding = false;
   bool isScanning = false;
@@ -107,11 +107,57 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   Set<String> selectedModelIds = <String>{};
   List<AnalysisResult> latestAnalysisResults = const [];
 
+  int targetScanCount = 1;
+  AveragingMethod averagingMethod = AveragingMethod.mean;
+  List<Spectrum> acquiredSpectra = const [];
+  int currentScanIndex = 0;
+
+  static const int _minScanCount = 1;
+  static const int _maxScanCount = 20;
+
+  void updateTargetScanCount(int value) {
+    final clamped = value < _minScanCount
+        ? _minScanCount
+        : (value > _maxScanCount ? _maxScanCount : value);
+    if (clamped == targetScanCount) {
+      return;
+    }
+    targetScanCount = clamped;
+    notifyListeners();
+  }
+
+  void updateAveragingMethod(AveragingMethod method) {
+    if (method == averagingMethod) {
+      return;
+    }
+    averagingMethod = method;
+    if (acquiredSpectra.length > 1) {
+      latestSpectrum = averageSpectra(acquiredSpectra, method: averagingMethod);
+      _runSelectedModelAnalysis(notify: false);
+    }
+    notifyListeners();
+  }
+
   Future<void> initialize() async {
     WidgetsBinding.instance.addObserver(this);
     await dataStore.init();
     await _loadKnownDevices();
     await _loadBundledModels(notify: false);
+    notifyListeners();
+    // Kick off discovery in the background so the picker already has live
+    // sensors by the time the user taps INITIALIZE or "Find devices".
+    unawaited(discoverSensors());
+  }
+
+  Future<void> forgetSavedSensors() async {
+    try {
+      await dataStore.clearDevices();
+    } catch (_) {
+      // Best-effort wipe — fall through to in-memory cleanup regardless.
+    }
+    _recentIps = const [];
+    discoveredSensors = const [];
+    statusMessage = 'Saved sensors cleared';
     notifyListeners();
   }
 
@@ -484,18 +530,39 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
       return;
     }
-    statusMessage = 'Scanning spectrum...';
+    final scanTotal = targetScanCount < 1 ? 1 : targetScanCount;
     isScanning = true;
+    currentScanIndex = 0;
+    acquiredSpectra = const [];
+    final collected = <Spectrum>[];
+    statusMessage = scanTotal == 1
+        ? 'Scanning spectrum...'
+        : 'Scanning 1/$scanTotal...';
     notifyListeners();
     try {
-      latestSpectrum = await client.runSpectrum(
-        scanParams,
-        timeout: const Duration(seconds: 20),
-      );
+      for (var i = 0; i < scanTotal; i++) {
+        currentScanIndex = i + 1;
+        if (scanTotal > 1) {
+          statusMessage = 'Scanning $currentScanIndex/$scanTotal...';
+          notifyListeners();
+        }
+        final spectrum = await client.runSpectrum(
+          scanParams,
+          timeout: const Duration(seconds: 20),
+        );
+        collected.add(spectrum);
+        acquiredSpectra = List.unmodifiable(collected);
+      }
+      latestSpectrum = collected.length == 1
+          ? collected.first
+          : averageSpectra(collected, method: averagingMethod);
       _runSelectedModelAnalysis(notify: false);
-      statusMessage = 'Ready to Scan';
+      statusMessage = scanTotal == 1
+          ? 'Ready to Scan'
+          : 'Captured $scanTotal scans (${averagingMethod.label})';
       captureCount += 1;
     } catch (error) {
+      acquiredSpectra = const [];
       final lost = await _handleConnectionLossIfNeeded(
         error,
         actionLabel: 'Spectrum',
@@ -510,6 +577,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       }
     } finally {
       isScanning = false;
+      currentScanIndex = 0;
     }
     notifyListeners();
   }
@@ -630,6 +698,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   void discardLatest() {
     latestSpectrum = null;
+    acquiredSpectra = const [];
     latestAnalysisResults = const [];
     statusMessage = 'Scan discarded';
     notifyListeners();
@@ -768,6 +837,11 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   void updateSendLengthPrefix(bool value) {
     sendLengthPrefix = value;
     client.sendLengthPrefix = value;
+    notifyListeners();
+  }
+
+  void updateShowGhNhDiagnostics(bool value) {
+    showGhNhDiagnostics = value;
     notifyListeners();
   }
 
@@ -914,12 +988,23 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
     final targets = _orderedUnique(seeds);
     final subnets = <String>[];
+
+    // 1. Auto-detect subnets from local non-cellular interfaces (highest priority).
+    //    Handles the case where the phone is hosting a hotspot on an unknown
+    //    subnet (e.g. 10.96.177.x) or has joined someone else's hotspot.
+    for (final subnet in await _detectLocalSubnets()) {
+      if (!subnets.contains(subnet)) {
+        subnets.add(subnet);
+      }
+    }
+
+    // 2. Add subnets from current/recent/known IPs, restricted to RFC1918 ranges.
     for (final ip in seeds) {
       final subnet = _subnetOf(ip);
       if (subnet == null || subnets.contains(subnet)) {
         continue;
       }
-      if (subnet.startsWith('10.')) {
+      if (_isPrivateIpv4(ip)) {
         subnets.add(subnet);
       }
     }
@@ -939,6 +1024,56 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     return _orderedUnique(targets);
+  }
+
+  Future<List<String>> _detectLocalSubnets() async {
+    final detected = <String>[];
+    try {
+      final interfaces = await NetworkInterface.list(
+        includeLoopback: false,
+        type: InternetAddressType.IPv4,
+      );
+      // Exclude cellular/PPP interfaces — we only want Wi-Fi / Wi-Fi tether / USB tether.
+      final cellularPattern = RegExp(
+        r'(rmnet|ccmni|pdp_ip|ppp|cellular)',
+        caseSensitive: false,
+      );
+      for (final iface in interfaces) {
+        if (cellularPattern.hasMatch(iface.name)) {
+          continue;
+        }
+        for (final addr in iface.addresses) {
+          final ip = addr.address;
+          if (!_isValidIpv4(ip) || !_isPrivateIpv4(ip)) {
+            continue;
+          }
+          final subnet = _subnetOf(ip);
+          if (subnet != null && !detected.contains(subnet)) {
+            detected.add(subnet);
+          }
+        }
+      }
+    } catch (_) {
+      // Best-effort only; platform may restrict interface enumeration.
+    }
+    return detected;
+  }
+
+  bool _isPrivateIpv4(String value) {
+    final ip = value.trim();
+    if (!_isValidIpv4(ip)) {
+      return false;
+    }
+    final parts = ip.split('.');
+    final a = int.tryParse(parts[0]);
+    final b = int.tryParse(parts[1]);
+    if (a == null || b == null) {
+      return false;
+    }
+    if (a == 10) return true;
+    if (a == 172 && b >= 16 && b <= 31) return true;
+    if (a == 192 && b == 168) return true;
+    return false;
   }
 
   Future<DiscoveredSensor?> _probeSensor(String ip) async {

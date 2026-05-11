@@ -125,6 +125,10 @@ class DataStore {
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  Future<void> clearDevices() async {
+    await _database.delete('devices');
+  }
+
   Future<List<String>> listRecentDeviceIps({int limit = 12}) async {
     final rows = await _database.query(
       'devices',

@@ -186,7 +186,11 @@ class _AcquireScreenState extends State<AcquireScreen> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        state.isScanning ? 'SCANNING...' : 'SCAN',
+                        state.isScanning
+                            ? (state.targetScanCount > 1
+                                ? '${state.currentScanIndex}/${state.targetScanCount}'
+                                : 'SCANNING...')
+                            : 'SCAN',
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           letterSpacing: 1.2,
                           color: canCapture ? Colors.white : null,
@@ -499,3 +503,4 @@ class _AcquireScreenState extends State<AcquireScreen> {
     );
   }
 }
+

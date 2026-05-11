@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../domain/averaging.dart';
 import '../../services/app_state.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -17,17 +18,25 @@ class SettingsScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Config', style: Theme.of(context).textTheme.headlineMedium),
+                Text(
+                  'Config',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
                 const SizedBox(height: 6),
-                Text('Control device and scan settings.',
-                    style: Theme.of(context).textTheme.bodyMedium),
+                Text(
+                  'Control device and scan settings.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
                 const SizedBox(height: 16),
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(20),
                     child: Row(
                       children: [
-                        Text('Theme', style: Theme.of(context).textTheme.labelLarge),
+                        Text(
+                          'Theme',
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: DropdownButtonFormField<ThemeMode>(
@@ -55,22 +64,72 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Card(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Saved sensors'),
+                      subtitle: const Text(
+                        'Clear stored device IPs from the picker.',
+                      ),
+                      trailing: TextButton.icon(
+                        onPressed: () => _confirmForgetSensors(context, state),
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Clear'),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Card(
                   child: ExpansionTile(
                     title: const Text('Advanced controls'),
                     subtitle: const Text('Scan + device settings'),
                     childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                     children: [
                       const SizedBox(height: 6),
-                      Text('Scan settings',
-                          style: Theme.of(context).textTheme.titleSmall),
+                      Text(
+                        'Scan settings',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
                       const SizedBox(height: 8),
+                      _sliderField(
+                        context: context,
+                        label: 'Scans per capture',
+                        value: state.targetScanCount.toDouble(),
+                        min: 1,
+                        max: 20,
+                        onChanged: (value) =>
+                            state.updateTargetScanCount(value.round()),
+                      ),
+                      _dropdownField<AveragingMethod>(
+                        context: context,
+                        label: 'Combine method',
+                        value: state.averagingMethod,
+                        items: AveragingMethod.values
+                            .map(
+                              (m) => DropdownMenuItem(
+                                value: m,
+                                child: Text(m.label),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          state.updateAveragingMethod(value);
+                        },
+                      ),
                       _sliderField(
                         context: context,
                         label: 'Scan time (ms)',
                         value: state.scanParams.scanTimeMs.toDouble(),
                         min: 10,
                         max: 224,
-                        onChanged: (value) => state.updateScanTime(value.toInt()),
+                        onChanged: (value) =>
+                            state.updateScanTime(value.toInt()),
                       ),
                       _dropdownField<int>(
                         context: context,
@@ -79,7 +138,10 @@ class SettingsScreen extends StatelessWidget {
                         items: const [
                           DropdownMenuItem(value: 1, child: Text('Fast')),
                           DropdownMenuItem(value: 2, child: Text('Balanced')),
-                          DropdownMenuItem(value: 3, child: Text('High detail')),
+                          DropdownMenuItem(
+                            value: 3,
+                            child: Text('High detail'),
+                          ),
                         ],
                         onChanged: (value) {
                           if (value == null) return;
@@ -110,7 +172,10 @@ class SettingsScreen extends StatelessWidget {
                         value: state.spectrumAxisUnit,
                         items: const [
                           DropdownMenuItem(value: 'DN', child: Text('DN')),
-                          DropdownMenuItem(value: 'cm^-1', child: Text('cm^-1')),
+                          DropdownMenuItem(
+                            value: 'cm^-1',
+                            child: Text('cm^-1'),
+                          ),
                           DropdownMenuItem(value: 'nm', child: Text('nm')),
                         ],
                         onChanged: (value) {
@@ -152,65 +217,91 @@ class SettingsScreen extends StatelessWidget {
                         value: state.sendLengthPrefix,
                         onChanged: state.updateSendLengthPrefix,
                         title: const Text('Enable packet prefix'),
-                        subtitle: const Text('Use only if support requests it.'),
+                        subtitle: const Text(
+                          'Use only if support requests it.',
+                        ),
+                      ),
+                      SwitchListTile(
+                        value: state.showGhNhDiagnostics,
+                        onChanged: state.updateShowGhNhDiagnostics,
+                        title: const Text('Show GH/NH in analysis'),
+                        subtitle: const Text(
+                          'Display model diagnostics next to predictions.',
+                        ),
                       ),
                       const SizedBox(height: 8),
-                      Text('Source settings',
-                          style: Theme.of(context).textTheme.titleSmall),
+                      Text(
+                        'Source settings',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
                       const SizedBox(height: 8),
                       _numberField(
                         label: 'Lamps count',
                         initialValue: state.lampsCount.toString(),
-                        onChanged: (value) => state.lampsCount = int.tryParse(value) ?? state.lampsCount,
+                        onChanged: (value) => state.lampsCount =
+                            int.tryParse(value) ?? state.lampsCount,
                       ),
                       _numberField(
                         label: 'Lamp select',
                         initialValue: state.lampSelect.toString(),
-                        onChanged: (value) => state.lampSelect = int.tryParse(value) ?? state.lampSelect,
+                        onChanged: (value) => state.lampSelect =
+                            int.tryParse(value) ?? state.lampSelect,
                       ),
                       _numberField(
                         label: 'T1',
                         initialValue: state.t1.toString(),
-                        onChanged: (value) => state.t1 = int.tryParse(value) ?? state.t1,
+                        onChanged: (value) =>
+                            state.t1 = int.tryParse(value) ?? state.t1,
                       ),
                       _numberField(
                         label: 'Delta T',
                         initialValue: state.deltaT.toString(),
-                        onChanged: (value) => state.deltaT = int.tryParse(value) ?? state.deltaT,
+                        onChanged: (value) =>
+                            state.deltaT = int.tryParse(value) ?? state.deltaT,
                       ),
                       _numberField(
                         label: 'T2 C1',
                         initialValue: state.t2c1.toString(),
-                        onChanged: (value) => state.t2c1 = int.tryParse(value) ?? state.t2c1,
+                        onChanged: (value) =>
+                            state.t2c1 = int.tryParse(value) ?? state.t2c1,
                       ),
                       _numberField(
                         label: 'T2 C2',
                         initialValue: state.t2c2.toString(),
-                        onChanged: (value) => state.t2c2 = int.tryParse(value) ?? state.t2c2,
+                        onChanged: (value) =>
+                            state.t2c2 = int.tryParse(value) ?? state.t2c2,
                       ),
                       _numberField(
                         label: 'T2 max',
                         initialValue: state.t2max.toString(),
-                        onChanged: (value) => state.t2max = int.tryParse(value) ?? state.t2max,
+                        onChanged: (value) =>
+                            state.t2max = int.tryParse(value) ?? state.t2max,
                       ),
                       const SizedBox(height: 12),
                       ElevatedButton.icon(
-                        onPressed: state.isConnected ? state.applySourceSettings : null,
+                        onPressed: state.isConnected
+                            ? state.applySourceSettings
+                            : null,
                         icon: const Icon(Icons.tune),
                         label: const Text('Apply source settings'),
                       ),
                       const SizedBox(height: 12),
-                      Text('Optical gain', style: Theme.of(context).textTheme.titleSmall),
+                      Text(
+                        'Optical gain',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
                       const SizedBox(height: 8),
                       _numberField(
                         label: 'Gain value',
                         initialValue: state.opticalGainValue.toString(),
-                        onChanged: (value) =>
-                            state.opticalGainValue = int.tryParse(value) ?? state.opticalGainValue,
+                        onChanged: (value) => state.opticalGainValue =
+                            int.tryParse(value) ?? state.opticalGainValue,
                       ),
                       const SizedBox(height: 12),
                       ElevatedButton.icon(
-                        onPressed: state.isConnected ? state.applyOpticalSettings : null,
+                        onPressed: state.isConnected
+                            ? state.applyOpticalSettings
+                            : null,
                         icon: const Icon(Icons.auto_fix_high),
                         label: const Text('Apply gain'),
                       ),
@@ -223,6 +314,50 @@ class SettingsScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _confirmForgetSensors(
+    BuildContext context,
+    AppState state,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Clear saved sensors?'),
+          content: const Text(
+            'All stored device IPs will be removed from the picker. '
+            'The current connection is unaffected. Discovery will find '
+            'them again next time.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Clear'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) {
+      return;
+    }
+    await state.forgetSavedSensors();
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Saved sensors cleared'),
+          duration: Duration(milliseconds: 1500),
+        ),
+      );
   }
 
   Widget _numberField({

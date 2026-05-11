@@ -15,6 +15,7 @@ class SpectrumChart extends StatefulWidget {
     this.minY = 0,
     this.maxY = 1.1,
     this.simplified = false,
+    this.overlays = const [],
   });
 
   final Spectrum? spectrum;
@@ -25,17 +26,21 @@ class SpectrumChart extends StatefulWidget {
   final double maxY;
   final bool simplified;
 
+  /// Additional spectra rendered as faded background traces.
+  /// Useful for displaying every individual scan under the averaged trace.
+  final List<Spectrum> overlays;
+
   @override
   State<SpectrumChart> createState() => _SpectrumChartState();
 }
 
 class _SpectrumChartState extends State<SpectrumChart> {
-  late Future<List<FlSpot>> _pointsFuture;
+  late Future<_ChartData> _dataFuture;
 
   @override
   void initState() {
     super.initState();
-    _pointsFuture = _buildPoints();
+    _dataFuture = _buildData();
   }
 
   @override
@@ -45,8 +50,10 @@ class _SpectrumChartState extends State<SpectrumChart> {
         oldWidget.axisUnit != widget.axisUnit ||
         oldWidget.maxPoints != widget.maxPoints ||
         oldWidget.minY != widget.minY ||
-        oldWidget.maxY != widget.maxY) {
-      _pointsFuture = _buildPoints();
+        oldWidget.maxY != widget.maxY ||
+        !identical(oldWidget.overlays, widget.overlays) ||
+        oldWidget.overlays.length != widget.overlays.length) {
+      _dataFuture = _buildData();
     }
   }
 
@@ -59,17 +66,37 @@ class _SpectrumChartState extends State<SpectrumChart> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (widget.title.trim().isNotEmpty) ...[
-              Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  widget.title,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
               const SizedBox(height: 12),
             ],
             SizedBox(
               height: 280,
-              child: FutureBuilder<List<FlSpot>>(
-                future: _pointsFuture,
+              child: FutureBuilder<_ChartData>(
+                future: _dataFuture,
                 builder: (context, snapshot) {
-                  final points = snapshot.data ?? [const FlSpot(0, 0)];
+                  final data =
+                      snapshot.data ??
+                      _ChartData(main: [const FlSpot(0, 0)], overlays: const []);
                   final enableTouch = !widget.simplified;
-                  final xInterval = _computeXInterval(points);
+                  final xInterval = _computeXInterval(data.main);
+                  final overlayColor = AppTheme.accent.withValues(alpha: 0.22);
+                  final overlayBars = [
+                    for (final spots in data.overlays)
+                      LineChartBarData(
+                        spots: spots,
+                        isCurved: false,
+                        barWidth: 1.0,
+                        dotData: FlDotData(show: false),
+                        color: overlayColor,
+                        belowBarData: BarAreaData(show: false),
+                      ),
+                  ];
                   return LineChart(
                     LineChartData(
                       minY: widget.minY,
@@ -155,14 +182,15 @@ class _SpectrumChartState extends State<SpectrumChart> {
                         ),
                       ),
                       lineBarsData: [
+                        ...overlayBars,
                         LineChartBarData(
-                          spots: points,
+                          spots: data.main,
                           isCurved: !widget.simplified,
                           barWidth: widget.simplified ? 1.6 : 2.2,
                           dotData: FlDotData(show: false),
                           color: AppTheme.accent,
                           belowBarData: BarAreaData(
-                            show: !widget.simplified,
+                            show: !widget.simplified && overlayBars.isEmpty,
                             gradient: LinearGradient(
                               colors: [
                                 AppTheme.accent.withValues(alpha: 0.22),
@@ -185,13 +213,16 @@ class _SpectrumChartState extends State<SpectrumChart> {
     );
   }
 
-  Future<List<FlSpot>> _buildPoints() async {
+  Future<_ChartData> _buildData() async {
     final spectrum = widget.spectrum;
     if (spectrum == null || spectrum.length == 0) {
-      return [const FlSpot(0, 0)];
+      return _ChartData(main: [const FlSpot(0, 0)], overlays: const []);
     }
     if (widget.simplified) {
-      return _buildPointsSync(spectrum);
+      return _ChartData(
+        main: _buildPointsSync(spectrum),
+        overlays: [for (final o in widget.overlays) _buildPointsSync(o)],
+      );
     }
     try {
       final pairs = await compute(_downsamplePairs, {
@@ -200,13 +231,20 @@ class _SpectrumChartState extends State<SpectrumChart> {
         'maxPoints': widget.maxPoints,
         'axisUnit': widget.axisUnit,
       });
-      final points = _pairsToSpots(pairs);
+      final mainPoints = _pairsToSpots(pairs);
       if (widget.axisUnit != 'DN') {
-        points.sort((a, b) => a.x.compareTo(b.x));
+        mainPoints.sort((a, b) => a.x.compareTo(b.x));
       }
-      return points;
+      final overlayPoints = <List<FlSpot>>[];
+      for (final overlay in widget.overlays) {
+        overlayPoints.add(_buildPointsSync(overlay));
+      }
+      return _ChartData(main: mainPoints, overlays: overlayPoints);
     } catch (_) {
-      return _buildPointsSync(spectrum);
+      return _ChartData(
+        main: _buildPointsSync(spectrum),
+        overlays: [for (final o in widget.overlays) _buildPointsSync(o)],
+      );
     }
   }
 
@@ -285,6 +323,13 @@ class _SpectrumChartState extends State<SpectrumChart> {
     }
     return points;
   }
+}
+
+class _ChartData {
+  _ChartData({required this.main, required this.overlays});
+
+  final List<FlSpot> main;
+  final List<List<FlSpot>> overlays;
 }
 
 List<double> _downsamplePairs(Map<String, Object> args) {

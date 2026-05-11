@@ -1,5 +1,671 @@
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
+
+class GhConfig {
+  GhConfig({
+    this.center,
+    this.variance,
+    this.centerVector = const <double>[],
+    this.varianceVector = const <double>[],
+    this.label = 'GH',
+    this.decimals = 3,
+    this.normalMax,
+    this.warningMax,
+  });
+
+  final double? center;
+  final double? variance;
+  final List<double> centerVector;
+  final List<double> varianceVector;
+  final String label;
+  final int decimals;
+  final double? normalMax;
+  final double? warningMax;
+
+  bool get isScalarValid {
+    final centerValue = center;
+    final varianceValue = variance;
+    return centerValue != null &&
+        varianceValue != null &&
+        centerValue.isFinite &&
+        varianceValue.isFinite &&
+        varianceValue > 0;
+  }
+
+  bool get isVectorValid {
+    final length = safeVectorLength;
+    if (length <= 0) {
+      return false;
+    }
+    for (var i = 0; i < length; i++) {
+      final centerValue = centerVector[i];
+      final varianceValue = varianceVector[i];
+      if (!centerValue.isFinite ||
+          !varianceValue.isFinite ||
+          varianceValue <= 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool get isValid => isScalarValid || isVectorValid;
+
+  int get safeVectorLength {
+    if (centerVector.isEmpty || varianceVector.isEmpty) {
+      return 0;
+    }
+    return min(centerVector.length, varianceVector.length);
+  }
+
+  factory GhConfig.fromJsonMap(Map<String, dynamic> map) {
+    final center = (map['center'] as num?)?.toDouble();
+    final variance = (map['variance'] as num?)?.toDouble();
+    final centerVectorRaw = _parseFiniteDoubleList(
+      map['center_vector'] as List<dynamic>?,
+    );
+    final varianceVectorRaw = _parseFiniteDoubleList(
+      map['variance_vector'] as List<dynamic>?,
+    );
+    final vectorLength = min(centerVectorRaw.length, varianceVectorRaw.length);
+    final centerVector = vectorLength <= 0
+        ? const <double>[]
+        : centerVectorRaw.sublist(0, vectorLength);
+    final varianceVector = vectorLength <= 0
+        ? const <double>[]
+        : varianceVectorRaw.sublist(0, vectorLength);
+
+    final labelRaw = (map['label'] as String? ?? 'GH').trim();
+    final decimalsRaw = (map['decimals'] as num?)?.toInt() ?? 3;
+    final normalMaxRaw = (map['normal_max'] as num?)?.toDouble();
+    final warningMaxRaw = (map['warning_max'] as num?)?.toDouble();
+    final normalMax =
+        (normalMaxRaw != null && normalMaxRaw.isFinite && normalMaxRaw >= 0)
+        ? normalMaxRaw
+        : null;
+    var warningMax =
+        (warningMaxRaw != null && warningMaxRaw.isFinite && warningMaxRaw >= 0)
+        ? warningMaxRaw
+        : null;
+    if (normalMax != null && warningMax != null && warningMax < normalMax) {
+      warningMax = normalMax;
+    }
+
+    final parsed = GhConfig(
+      center: center,
+      variance: variance,
+      centerVector: centerVector,
+      varianceVector: varianceVector,
+      label: labelRaw.isEmpty ? 'GH' : labelRaw,
+      decimals: decimalsRaw < 0 ? 0 : (decimalsRaw > 6 ? 6 : decimalsRaw),
+      normalMax: normalMax,
+      warningMax: warningMax,
+    );
+    if (!parsed.isValid) {
+      throw const FormatException('Invalid GH config');
+    }
+    return parsed;
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (isScalarValid) 'center': center,
+      if (isScalarValid) 'variance': variance,
+      if (isVectorValid) 'center_vector': centerVector,
+      if (isVectorValid) 'variance_vector': varianceVector,
+      'label': label,
+      'decimals': decimals,
+      if (normalMax != null) 'normal_max': normalMax,
+      if (warningMax != null) 'warning_max': warningMax,
+    };
+  }
+}
+
+class NhConfig {
+  NhConfig({
+    this.referenceScores = const <double>[],
+    this.referenceVectors = const <List<double>>[],
+    this.k = 5,
+    this.label = 'NH',
+    this.decimals = 3,
+    this.normalMax,
+    this.warningMax,
+  });
+
+  final List<double> referenceScores;
+  final List<List<double>> referenceVectors;
+  final int k;
+  final String label;
+  final int decimals;
+  final double? normalMax;
+  final double? warningMax;
+
+  bool get isScalarValid => referenceScores.isNotEmpty;
+
+  bool get isVectorValid {
+    if (referenceVectors.isEmpty) {
+      return false;
+    }
+    for (final vector in referenceVectors) {
+      if (vector.isEmpty) {
+        return false;
+      }
+      for (final value in vector) {
+        if (!value.isFinite) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  bool get isValid => isScalarValid || isVectorValid;
+
+  int get safeK {
+    final scalarCount = referenceScores.length;
+    final vectorCount = referenceVectors.length;
+    final available = scalarCount > 0 ? scalarCount : vectorCount;
+    return safeKForCount(available);
+  }
+
+  int safeKForCount(int availableCount) {
+    if (availableCount <= 0) {
+      return 0;
+    }
+    return min(max(1, k), availableCount);
+  }
+
+  factory NhConfig.fromJsonMap(Map<String, dynamic> map) {
+    final parsed = _parseFiniteDoubleList(
+      map['reference_scores'] as List<dynamic>?,
+    );
+    final parsedVectors = _parseFiniteDoubleMatrix(
+      map['reference_vectors'] as List<dynamic>?,
+    );
+
+    final labelRaw = (map['label'] as String? ?? 'NH').trim();
+    final kRaw = (map['k'] as num?)?.toInt() ?? 5;
+    final decimalsRaw = (map['decimals'] as num?)?.toInt() ?? 3;
+    final normalMaxRaw = (map['normal_max'] as num?)?.toDouble();
+    final warningMaxRaw = (map['warning_max'] as num?)?.toDouble();
+    final normalMax =
+        (normalMaxRaw != null && normalMaxRaw.isFinite && normalMaxRaw >= 0)
+        ? normalMaxRaw
+        : null;
+    var warningMax =
+        (warningMaxRaw != null && warningMaxRaw.isFinite && warningMaxRaw >= 0)
+        ? warningMaxRaw
+        : null;
+    if (normalMax != null && warningMax != null && warningMax < normalMax) {
+      warningMax = normalMax;
+    }
+    final parsedConfig = NhConfig(
+      referenceScores: parsed,
+      referenceVectors: parsedVectors,
+      k: kRaw,
+      label: labelRaw.isEmpty ? 'NH' : labelRaw,
+      decimals: decimalsRaw < 0 ? 0 : (decimalsRaw > 6 ? 6 : decimalsRaw),
+      normalMax: normalMax,
+      warningMax: warningMax,
+    );
+    if (!parsedConfig.isValid) {
+      throw const FormatException('Invalid NH config');
+    }
+    return parsedConfig;
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (isScalarValid) 'reference_scores': referenceScores,
+      if (isVectorValid) 'reference_vectors': referenceVectors,
+      'k': k,
+      'label': label,
+      'decimals': decimals,
+      if (normalMax != null) 'normal_max': normalMax,
+      if (warningMax != null) 'warning_max': warningMax,
+    };
+  }
+}
+
+class GhNhConfig {
+  GhNhConfig({required this.enabled, required this.space, this.gh, this.nh});
+
+  final bool enabled;
+  final String space;
+  final GhConfig? gh;
+  final NhConfig? nh;
+
+  bool get isPredictionScoreSpace =>
+      space.isEmpty || space == 'prediction_score';
+
+  bool get isValid {
+    if (!enabled || !isPredictionScoreSpace) {
+      return false;
+    }
+    final hasGh =
+        gh != null &&
+        (isPredictionScoreSpace ? gh!.isScalarValid : gh!.isVectorValid);
+    final hasNh =
+        nh != null &&
+        (isPredictionScoreSpace ? nh!.isScalarValid : nh!.isVectorValid);
+    return hasGh || hasNh;
+  }
+
+  factory GhNhConfig.fromJsonMap(Map<String, dynamic> map) {
+    if (map.isEmpty) {
+      throw const FormatException('Empty GH/NH config');
+    }
+
+    final enabled = map['enabled'] != false;
+    final spaceRaw = (map['space'] as String? ?? 'prediction_score')
+        .trim()
+        .toLowerCase();
+    final space = spaceRaw.isEmpty ? 'prediction_score' : spaceRaw;
+
+    GhConfig? gh;
+    final ghRaw = map['gh'];
+    if (ghRaw is Map) {
+      try {
+        gh = GhConfig.fromJsonMap(Map<String, dynamic>.from(ghRaw));
+      } catch (_) {
+        gh = null;
+      }
+    }
+
+    NhConfig? nh;
+    final nhRaw = map['nh'];
+    if (nhRaw is Map) {
+      try {
+        nh = NhConfig.fromJsonMap(Map<String, dynamic>.from(nhRaw));
+      } catch (_) {
+        nh = null;
+      }
+    }
+
+    return GhNhConfig(enabled: enabled, space: space, gh: gh, nh: nh);
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'enabled': enabled,
+      'space': space,
+      if (gh != null) 'gh': gh!.toJson(),
+      if (nh != null) 'nh': nh!.toJson(),
+    };
+  }
+}
+
+class FossMetricConfig {
+  FossMetricConfig({
+    required this.enabled,
+    required this.label,
+    required this.decimals,
+    this.normalMax,
+    this.warningMax,
+  });
+
+  final bool enabled;
+  final String label;
+  final int decimals;
+  final double? normalMax;
+  final double? warningMax;
+
+  bool get hasThreshold =>
+      normalMax != null && normalMax!.isFinite && normalMax! >= 0;
+
+  factory FossMetricConfig.fromJsonMap(
+    Map<String, dynamic> map, {
+    required String fallbackLabel,
+  }) {
+    final enabled = map['enabled'] != false;
+    final labelRaw = (map['label'] as String? ?? fallbackLabel).trim();
+    final decimalsRaw = (map['decimals'] as num?)?.toInt() ?? 3;
+    final normalMaxRaw = (map['normal_max'] as num?)?.toDouble();
+    final warningMaxRaw = (map['warning_max'] as num?)?.toDouble();
+    final normalMax =
+        (normalMaxRaw != null && normalMaxRaw.isFinite && normalMaxRaw >= 0)
+        ? normalMaxRaw
+        : null;
+    var warningMax =
+        (warningMaxRaw != null && warningMaxRaw.isFinite && warningMaxRaw >= 0)
+        ? warningMaxRaw
+        : null;
+    if (normalMax != null && warningMax != null && warningMax < normalMax) {
+      warningMax = normalMax;
+    }
+    return FossMetricConfig(
+      enabled: enabled,
+      label: labelRaw.isEmpty ? fallbackLabel : labelRaw,
+      decimals: decimalsRaw < 0 ? 0 : (decimalsRaw > 6 ? 6 : decimalsRaw),
+      normalMax: normalMax,
+      warningMax: warningMax,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'enabled': enabled,
+      'label': label,
+      'decimals': decimals,
+      if (normalMax != null) 'normal_max': normalMax,
+      if (warningMax != null) 'warning_max': warningMax,
+    };
+  }
+}
+
+class FossPcaConfig {
+  FossPcaConfig({
+    required this.mean,
+    required this.loadings,
+    required this.scoreCenter,
+    required this.scoreVariance,
+  });
+
+  final List<double> mean;
+  final List<List<double>> loadings;
+  final List<double> scoreCenter;
+  final List<double> scoreVariance;
+
+  int get featureLength => mean.length;
+
+  int get components {
+    final available = min(
+      loadings.length,
+      min(scoreCenter.length, scoreVariance.length),
+    );
+    return available < 0 ? 0 : available;
+  }
+
+  bool get isValid {
+    if (mean.isEmpty || loadings.isEmpty) {
+      return false;
+    }
+    if (components <= 0) {
+      return false;
+    }
+    for (var i = 0; i < components; i++) {
+      final loading = loadings[i];
+      if (loading.length != featureLength) {
+        return false;
+      }
+      final variance = scoreVariance[i];
+      final center = scoreCenter[i];
+      if (!variance.isFinite || variance <= 0 || !center.isFinite) {
+        return false;
+      }
+      for (final value in loading) {
+        if (!value.isFinite) {
+          return false;
+        }
+      }
+    }
+    for (final value in mean) {
+      if (!value.isFinite) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  factory FossPcaConfig.fromJsonMap(Map<String, dynamic> map) {
+    final mean = _parseFiniteDoubleList(map['mean'] as List<dynamic>?);
+    final loadings = _parseFiniteDoubleMatrix(
+      map['loadings'] as List<dynamic>?,
+    );
+    final scoreCenter = _parseFiniteDoubleList(
+      map['score_center'] as List<dynamic>?,
+    );
+    final scoreVariance = _parseFiniteDoubleList(
+      map['score_variance'] as List<dynamic>?,
+    );
+
+    final parsed = FossPcaConfig(
+      mean: mean,
+      loadings: loadings,
+      scoreCenter: scoreCenter,
+      scoreVariance: scoreVariance,
+    );
+    if (!parsed.isValid) {
+      throw const FormatException('Invalid PCA diagnostics config');
+    }
+    return parsed;
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'mean': mean,
+      'loadings': loadings,
+      'score_center': scoreCenter,
+      'score_variance': scoreVariance,
+    };
+  }
+}
+
+class FossNhConfig {
+  FossNhConfig({
+    required this.enabled,
+    required this.referenceScores,
+    this.k = 5,
+    this.label = 'NH',
+    this.decimals = 3,
+    this.normalMax,
+    this.warningMax,
+  });
+
+  final bool enabled;
+  final List<List<double>> referenceScores;
+  final int k;
+  final String label;
+  final int decimals;
+  final double? normalMax;
+  final double? warningMax;
+
+  int get dimension =>
+      referenceScores.isEmpty ? 0 : referenceScores.first.length;
+
+  bool get isValid {
+    if (referenceScores.isEmpty) {
+      return false;
+    }
+    final size = dimension;
+    if (size <= 0) {
+      return false;
+    }
+    for (final row in referenceScores) {
+      if (row.length != size) {
+        return false;
+      }
+      for (final value in row) {
+        if (!value.isFinite) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  int safeKForCount(int availableCount) {
+    if (availableCount <= 0) {
+      return 0;
+    }
+    return min(max(1, k), availableCount);
+  }
+
+  factory FossNhConfig.fromJsonMap(Map<String, dynamic> map) {
+    final enabled = map['enabled'] != false;
+    final referenceScores = _parseFiniteDoubleMatrix(
+      map['reference_scores'] as List<dynamic>?,
+    );
+    final kRaw = (map['k'] as num?)?.toInt() ?? 5;
+    final labelRaw = (map['label'] as String? ?? 'NH').trim();
+    final decimalsRaw = (map['decimals'] as num?)?.toInt() ?? 3;
+    final normalMaxRaw = (map['normal_max'] as num?)?.toDouble();
+    final warningMaxRaw = (map['warning_max'] as num?)?.toDouble();
+    final normalMax =
+        (normalMaxRaw != null && normalMaxRaw.isFinite && normalMaxRaw >= 0)
+        ? normalMaxRaw
+        : null;
+    var warningMax =
+        (warningMaxRaw != null && warningMaxRaw.isFinite && warningMaxRaw >= 0)
+        ? warningMaxRaw
+        : null;
+    if (normalMax != null && warningMax != null && warningMax < normalMax) {
+      warningMax = normalMax;
+    }
+
+    final parsed = FossNhConfig(
+      enabled: enabled,
+      referenceScores: referenceScores,
+      k: kRaw,
+      label: labelRaw.isEmpty ? 'NH' : labelRaw,
+      decimals: decimalsRaw < 0 ? 0 : (decimalsRaw > 6 ? 6 : decimalsRaw),
+      normalMax: normalMax,
+      warningMax: warningMax,
+    );
+    if (!parsed.isValid) {
+      throw const FormatException('Invalid NH diagnostics config');
+    }
+    return parsed;
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'enabled': enabled,
+      'reference_scores': referenceScores,
+      'k': k,
+      'label': label,
+      'decimals': decimals,
+      if (normalMax != null) 'normal_max': normalMax,
+      if (warningMax != null) 'warning_max': warningMax,
+    };
+  }
+}
+
+class FossGhNhConfig {
+  FossGhNhConfig({
+    required this.enabled,
+    required this.space,
+    required this.pca,
+    this.gh,
+    this.nh,
+    this.q,
+  });
+
+  final bool enabled;
+  final String space;
+  final FossPcaConfig pca;
+  final FossMetricConfig? gh;
+  final FossNhConfig? nh;
+  final FossMetricConfig? q;
+
+  bool get isPcaScoreSpace => space.isEmpty || space == 'pca_score';
+
+  bool get isValid {
+    if (!enabled || !isPcaScoreSpace || !pca.isValid) {
+      return false;
+    }
+    final hasGh = gh != null && gh!.enabled;
+    final hasNh = nh != null && nh!.enabled && nh!.isValid;
+    final hasQ = q != null && q!.enabled;
+    return hasGh || hasNh || hasQ;
+  }
+
+  factory FossGhNhConfig.fromJsonMap(Map<String, dynamic> map) {
+    final enabled = map['enabled'] != false;
+    final spaceRaw = (map['space'] as String? ?? 'pca_score')
+        .trim()
+        .toLowerCase();
+    final space = spaceRaw.isEmpty ? 'pca_score' : spaceRaw;
+
+    final pcaRaw = map['pca'];
+    if (pcaRaw is! Map) {
+      throw const FormatException('Missing PCA diagnostics config');
+    }
+    final pca = FossPcaConfig.fromJsonMap(Map<String, dynamic>.from(pcaRaw));
+
+    FossMetricConfig? gh;
+    final ghRaw = map['gh'];
+    if (ghRaw is Map) {
+      gh = FossMetricConfig.fromJsonMap(
+        Map<String, dynamic>.from(ghRaw),
+        fallbackLabel: 'GH',
+      );
+    }
+
+    FossNhConfig? nh;
+    final nhRaw = map['nh'];
+    if (nhRaw is Map) {
+      nh = FossNhConfig.fromJsonMap(Map<String, dynamic>.from(nhRaw));
+    }
+
+    FossMetricConfig? q;
+    final qRaw = map['q'];
+    if (qRaw is Map) {
+      q = FossMetricConfig.fromJsonMap(
+        Map<String, dynamic>.from(qRaw),
+        fallbackLabel: 'Q',
+      );
+    }
+
+    final parsed = FossGhNhConfig(
+      enabled: enabled,
+      space: space,
+      pca: pca,
+      gh: gh,
+      nh: nh,
+      q: q,
+    );
+    if (!parsed.isValid) {
+      throw const FormatException('Invalid GH/NH diagnostics config');
+    }
+    return parsed;
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'enabled': enabled,
+      'space': space,
+      'pca': pca.toJson(),
+      if (gh != null) 'gh': gh!.toJson(),
+      if (nh != null) 'nh': nh!.toJson(),
+      if (q != null) 'q': q!.toJson(),
+    };
+  }
+}
+
+List<double> _parseFiniteDoubleList(List<dynamic>? raw) {
+  if (raw == null) {
+    return const <double>[];
+  }
+  final parsed = <double>[];
+  for (final value in raw) {
+    if (value is num) {
+      final cast = value.toDouble();
+      if (cast.isFinite) {
+        parsed.add(cast);
+      }
+    }
+  }
+  return parsed;
+}
+
+List<List<double>> _parseFiniteDoubleMatrix(List<dynamic>? raw) {
+  if (raw == null) {
+    return const <List<double>>[];
+  }
+  final parsed = <List<double>>[];
+  for (final row in raw) {
+    if (row is! List) {
+      continue;
+    }
+    final values = _parseFiniteDoubleList(List<dynamic>.from(row));
+    if (values.isNotEmpty) {
+      parsed.add(values);
+    }
+  }
+  return parsed;
+}
 
 class CalibrationModel {
   CalibrationModel({
@@ -19,6 +685,8 @@ class CalibrationModel {
     this.positiveClassIndex,
     this.classes = const [],
     this.axisUnit = '',
+    this.ghNhConfig,
+    this.fossGhNhConfig,
   });
 
   final String id;
@@ -37,6 +705,8 @@ class CalibrationModel {
   final int? positiveClassIndex;
   final List<String> classes;
   final String axisUnit;
+  final GhNhConfig? ghNhConfig;
+  final FossGhNhConfig? fossGhNhConfig;
 
   bool get isClassification => modelType == 'pls_da_binary';
 
@@ -82,6 +752,8 @@ class CalibrationModel {
       positiveClassIndex: null,
       classes: const [],
       axisUnit: '',
+      ghNhConfig: null,
+      fossGhNhConfig: null,
     );
   }
 
@@ -109,6 +781,53 @@ class CalibrationModel {
                 jsonMap['x_axis_unit'] as String? ??
                 '')
             .trim();
+
+    GhNhConfig? ghNhConfig;
+    final ghNhRaw = Map<String, dynamic>.from(
+      (jsonMap['gh_nh'] as Map?) ?? const <String, dynamic>{},
+    );
+    if (ghNhRaw.isNotEmpty) {
+      final hasPcaConfig = ghNhRaw['pca'] is Map;
+      if (!hasPcaConfig) {
+        try {
+          final parsed = GhNhConfig.fromJsonMap(ghNhRaw);
+          if (parsed.isValid) {
+            ghNhConfig = parsed;
+          }
+        } catch (_) {
+          ghNhConfig = null;
+        }
+      }
+    }
+
+    FossGhNhConfig? fossGhNhConfig;
+    final ghNhHasPca = ghNhRaw['pca'] is Map;
+    if (ghNhHasPca) {
+      try {
+        final parsed = FossGhNhConfig.fromJsonMap(ghNhRaw);
+        if (parsed.isValid) {
+          fossGhNhConfig = parsed;
+        }
+      } catch (_) {
+        fossGhNhConfig = null;
+      }
+    }
+
+    if (fossGhNhConfig == null) {
+      final fossGhNhRaw = Map<String, dynamic>.from(
+        (jsonMap['foss_gh_nh'] as Map?) ?? const <String, dynamic>{},
+      );
+      if (fossGhNhRaw.isNotEmpty) {
+        try {
+          final parsed = FossGhNhConfig.fromJsonMap(fossGhNhRaw);
+          if (parsed.isValid) {
+            fossGhNhConfig = parsed;
+          }
+        } catch (_) {
+          fossGhNhConfig = null;
+        }
+      }
+    }
 
     final label = rawLabel != null && rawLabel.isNotEmpty
         ? rawLabel
@@ -181,6 +900,8 @@ class CalibrationModel {
       positiveClassIndex: (jsonMap['positive_class_index'] as num?)?.toInt(),
       classes: classes,
       axisUnit: axisUnit,
+      ghNhConfig: ghNhConfig,
+      fossGhNhConfig: fossGhNhConfig,
     );
   }
 
@@ -202,6 +923,9 @@ class CalibrationModel {
       'positiveClassIndex': positiveClassIndex,
       'classes': classes,
       'axisUnit': axisUnit,
+      if (fossGhNhConfig != null) 'gh_nh': fossGhNhConfig!.toJson(),
+      if (fossGhNhConfig == null && ghNhConfig != null)
+        'gh_nh': ghNhConfig!.toJson(),
     };
   }
 

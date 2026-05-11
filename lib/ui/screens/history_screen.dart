@@ -199,11 +199,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                                       ).textTheme.labelLarge,
                                                     ),
                                                     const SizedBox(height: 4),
-                                                    ...analyses.map(
-                                                      (analysis) => Text(
-                                                        '${analysis.label}: ${analysis.displayValue}',
-                                                      ),
-                                                    ),
+                                                    ...analyses.map((analysis) {
+                                                      final diagnostics = analysis
+                                                          .diagnosticsSummary;
+                                                      final text =
+                                                          diagnostics.isEmpty
+                                                          ? '${analysis.label}: ${analysis.displayValue}'
+                                                          : '${analysis.label}: ${analysis.displayValue} ($diagnostics)';
+                                                      return Text(text);
+                                                    }),
                                                   ],
                                                 ],
                                               ),
@@ -423,6 +427,96 @@ class _HistoryScreenState extends State<HistoryScreen> {
             header: analysis.columnHeader,
           ),
         );
+        if (analysis.hasGh) {
+          analysisColumns.putIfAbsent(
+            analysis.ghColumnKey,
+            () => _CsvAnalysisColumn(
+              key: analysis.ghColumnKey,
+              header: analysis.ghColumnHeader,
+            ),
+          );
+        }
+        if (analysis.hasGhLevel) {
+          analysisColumns.putIfAbsent(
+            analysis.ghLevelColumnKey,
+            () => _CsvAnalysisColumn(
+              key: analysis.ghLevelColumnKey,
+              header: analysis.ghLevelColumnHeader,
+            ),
+          );
+        }
+        if (analysis.hasNh) {
+          analysisColumns.putIfAbsent(
+            analysis.nhColumnKey,
+            () => _CsvAnalysisColumn(
+              key: analysis.nhColumnKey,
+              header: analysis.nhColumnHeader,
+            ),
+          );
+        }
+        if (analysis.hasNhLevel) {
+          analysisColumns.putIfAbsent(
+            analysis.nhLevelColumnKey,
+            () => _CsvAnalysisColumn(
+              key: analysis.nhLevelColumnKey,
+              header: analysis.nhLevelColumnHeader,
+            ),
+          );
+        }
+        if (analysis.hasFossGh) {
+          analysisColumns.putIfAbsent(
+            analysis.fossGhColumnKey,
+            () => _CsvAnalysisColumn(
+              key: analysis.fossGhColumnKey,
+              header: analysis.fossGhColumnHeader,
+            ),
+          );
+        }
+        if (analysis.hasFossGhLevel) {
+          analysisColumns.putIfAbsent(
+            analysis.fossGhLevelColumnKey,
+            () => _CsvAnalysisColumn(
+              key: analysis.fossGhLevelColumnKey,
+              header: analysis.fossGhLevelColumnHeader,
+            ),
+          );
+        }
+        if (analysis.hasFossNh) {
+          analysisColumns.putIfAbsent(
+            analysis.fossNhColumnKey,
+            () => _CsvAnalysisColumn(
+              key: analysis.fossNhColumnKey,
+              header: analysis.fossNhColumnHeader,
+            ),
+          );
+        }
+        if (analysis.hasFossNhLevel) {
+          analysisColumns.putIfAbsent(
+            analysis.fossNhLevelColumnKey,
+            () => _CsvAnalysisColumn(
+              key: analysis.fossNhLevelColumnKey,
+              header: analysis.fossNhLevelColumnHeader,
+            ),
+          );
+        }
+        if (analysis.hasFossQ) {
+          analysisColumns.putIfAbsent(
+            analysis.fossQColumnKey,
+            () => _CsvAnalysisColumn(
+              key: analysis.fossQColumnKey,
+              header: analysis.fossQColumnHeader,
+            ),
+          );
+        }
+        if (analysis.hasFossQLevel) {
+          analysisColumns.putIfAbsent(
+            analysis.fossQLevelColumnKey,
+            () => _CsvAnalysisColumn(
+              key: analysis.fossQLevelColumnKey,
+              header: analysis.fossQLevelColumnHeader,
+            ),
+          );
+        }
       }
 
       final spectra = await dataStore.getSpectra(item.id);
@@ -602,8 +696,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
     String columnKey,
   ) {
     for (final analysis in analyses) {
-      if (analysis.columnKey == columnKey) {
-        return analysis.displayValue;
+      final value = analysis.valueForColumn(columnKey);
+      if (value != null) {
+        return value;
       }
     }
     return '';
@@ -786,6 +881,21 @@ class _HistoryAnalysis {
     required this.displayValue,
     required this.units,
     required this.primaryValue,
+    required this.ghLabel,
+    required this.nhLabel,
+    required this.fossGhLabel,
+    required this.fossNhLabel,
+    required this.fossQLabel,
+    this.ghLevel,
+    this.nhLevel,
+    this.ghDisplayValue,
+    this.nhDisplayValue,
+    this.fossGhLevel,
+    this.fossNhLevel,
+    this.fossQLevel,
+    this.fossGhDisplayValue,
+    this.fossNhDisplayValue,
+    this.fossQDisplayValue,
   });
 
   final String modelId;
@@ -794,6 +904,21 @@ class _HistoryAnalysis {
   final String displayValue;
   final String units;
   final String primaryValue;
+  final String ghLabel;
+  final String nhLabel;
+  final String fossGhLabel;
+  final String fossNhLabel;
+  final String fossQLabel;
+  final String? ghLevel;
+  final String? nhLevel;
+  final String? ghDisplayValue;
+  final String? nhDisplayValue;
+  final String? fossGhLevel;
+  final String? fossNhLevel;
+  final String? fossQLevel;
+  final String? fossGhDisplayValue;
+  final String? fossNhDisplayValue;
+  final String? fossQDisplayValue;
 
   String get columnKey {
     if (modelId.isNotEmpty) {
@@ -808,6 +933,163 @@ class _HistoryAnalysis {
       return '$label ($modelName)';
     }
     return label;
+  }
+
+  bool get hasGh => ghDisplayValue != null && ghDisplayValue!.trim().isNotEmpty;
+
+  bool get hasNh => nhDisplayValue != null && nhDisplayValue!.trim().isNotEmpty;
+
+  String get ghColumnKey => '${columnKey}__gh';
+
+  String get nhColumnKey => '${columnKey}__nh';
+
+  String get ghLevelColumnKey => '${columnKey}__gh_level';
+
+  String get nhLevelColumnKey => '${columnKey}__nh_level';
+
+  String get fossGhColumnKey => '${columnKey}__foss_gh';
+
+  String get fossNhColumnKey => '${columnKey}__foss_nh';
+
+  String get fossQColumnKey => '${columnKey}__foss_q';
+
+  String get fossGhLevelColumnKey => '${columnKey}__foss_gh_level';
+
+  String get fossNhLevelColumnKey => '${columnKey}__foss_nh_level';
+
+  String get fossQLevelColumnKey => '${columnKey}__foss_q_level';
+
+  String get ghColumnHeader {
+    final context = modelName.isNotEmpty ? modelName : label;
+    return '$ghLabel ($context)';
+  }
+
+  String get nhColumnHeader {
+    final context = modelName.isNotEmpty ? modelName : label;
+    return '$nhLabel ($context)';
+  }
+
+  String get ghLevelColumnHeader {
+    final context = modelName.isNotEmpty ? modelName : label;
+    return '$ghLabel Level ($context)';
+  }
+
+  String get nhLevelColumnHeader {
+    final context = modelName.isNotEmpty ? modelName : label;
+    return '$nhLabel Level ($context)';
+  }
+
+  String get fossGhColumnHeader {
+    final context = modelName.isNotEmpty ? modelName : label;
+    return '$fossGhLabel ($context)';
+  }
+
+  String get fossNhColumnHeader {
+    final context = modelName.isNotEmpty ? modelName : label;
+    return '$fossNhLabel ($context)';
+  }
+
+  String get fossQColumnHeader {
+    final context = modelName.isNotEmpty ? modelName : label;
+    return '$fossQLabel ($context)';
+  }
+
+  String get fossGhLevelColumnHeader {
+    final context = modelName.isNotEmpty ? modelName : label;
+    return '$fossGhLabel Level ($context)';
+  }
+
+  String get fossNhLevelColumnHeader {
+    final context = modelName.isNotEmpty ? modelName : label;
+    return '$fossNhLabel Level ($context)';
+  }
+
+  String get fossQLevelColumnHeader {
+    final context = modelName.isNotEmpty ? modelName : label;
+    return '$fossQLabel Level ($context)';
+  }
+
+  bool get hasGhLevel => ghLevel != null && ghLevel!.trim().isNotEmpty;
+
+  bool get hasNhLevel => nhLevel != null && nhLevel!.trim().isNotEmpty;
+
+  bool get hasFossGh =>
+      fossGhDisplayValue != null && fossGhDisplayValue!.trim().isNotEmpty;
+
+  bool get hasFossNh =>
+      fossNhDisplayValue != null && fossNhDisplayValue!.trim().isNotEmpty;
+
+  bool get hasFossQ =>
+      fossQDisplayValue != null && fossQDisplayValue!.trim().isNotEmpty;
+
+  bool get hasFossGhLevel =>
+      fossGhLevel != null && fossGhLevel!.trim().isNotEmpty;
+
+  bool get hasFossNhLevel =>
+      fossNhLevel != null && fossNhLevel!.trim().isNotEmpty;
+
+  bool get hasFossQLevel => fossQLevel != null && fossQLevel!.trim().isNotEmpty;
+
+  String get diagnosticsSummary {
+    final parts = <String>[];
+    if (hasGh) {
+      final level = hasGhLevel ? ' [${ghLevel!}]' : '';
+      parts.add('$ghLabel: ${ghDisplayValue!}$level');
+    }
+    if (hasNh) {
+      final level = hasNhLevel ? ' [${nhLevel!}]' : '';
+      parts.add('$nhLabel: ${nhDisplayValue!}$level');
+    }
+    if (hasFossGh) {
+      final level = hasFossGhLevel ? ' [${fossGhLevel!}]' : '';
+      parts.add('$fossGhLabel: ${fossGhDisplayValue!}$level');
+    }
+    if (hasFossNh) {
+      final level = hasFossNhLevel ? ' [${fossNhLevel!}]' : '';
+      parts.add('$fossNhLabel: ${fossNhDisplayValue!}$level');
+    }
+    if (hasFossQ) {
+      final level = hasFossQLevel ? ' [${fossQLevel!}]' : '';
+      parts.add('$fossQLabel: ${fossQDisplayValue!}$level');
+    }
+    return parts.join(', ');
+  }
+
+  String? valueForColumn(String key) {
+    if (key == columnKey) {
+      return displayValue;
+    }
+    if (hasGh && key == ghColumnKey) {
+      return ghDisplayValue;
+    }
+    if (hasNh && key == nhColumnKey) {
+      return nhDisplayValue;
+    }
+    if (hasGhLevel && key == ghLevelColumnKey) {
+      return ghLevel;
+    }
+    if (hasNhLevel && key == nhLevelColumnKey) {
+      return nhLevel;
+    }
+    if (hasFossGh && key == fossGhColumnKey) {
+      return fossGhDisplayValue;
+    }
+    if (hasFossNh && key == fossNhColumnKey) {
+      return fossNhDisplayValue;
+    }
+    if (hasFossQ && key == fossQColumnKey) {
+      return fossQDisplayValue;
+    }
+    if (hasFossGhLevel && key == fossGhLevelColumnKey) {
+      return fossGhLevel;
+    }
+    if (hasFossNhLevel && key == fossNhLevelColumnKey) {
+      return fossNhLevel;
+    }
+    if (hasFossQLevel && key == fossQLevelColumnKey) {
+      return fossQLevel;
+    }
+    return null;
   }
 
   factory _HistoryAnalysis.fromMap(Map<String, dynamic> map) {
@@ -833,6 +1115,67 @@ class _HistoryAnalysis {
         ? numericValue.toStringAsFixed(2)
         : (fallbackRaw.isNotEmpty ? fallbackRaw : displayValue);
 
+    final ghLabelRaw = (map['ghLabel']?.toString() ?? 'GH').trim();
+    final nhLabelRaw = (map['nhLabel']?.toString() ?? 'NH').trim();
+    final fossGhLabelRaw = (map['fossGhLabel']?.toString() ?? 'GH').trim();
+    final fossNhLabelRaw = (map['fossNhLabel']?.toString() ?? 'NH').trim();
+    final ghLevelRaw = (map['ghLevel']?.toString() ?? '').trim();
+    final nhLevelRaw = (map['nhLevel']?.toString() ?? '').trim();
+    final fossGhLevelRaw = (map['fossGhLevel']?.toString() ?? '').trim();
+    final fossNhLevelRaw = (map['fossNhLevel']?.toString() ?? '').trim();
+    final ghNumeric = map['gh'] is num ? (map['gh'] as num).toDouble() : null;
+    final nhNumeric = map['nh'] is num ? (map['nh'] as num).toDouble() : null;
+    final fossGhNumeric = map['fossGh'] is num
+        ? (map['fossGh'] as num).toDouble()
+        : null;
+    final fossNhNumeric = map['fossNh'] is num
+        ? (map['fossNh'] as num).toDouble()
+        : null;
+    final ghDisplayRaw = (map['ghDisplayValue']?.toString() ?? '').trim();
+    final nhDisplayRaw = (map['nhDisplayValue']?.toString() ?? '').trim();
+    final fossGhDisplayRaw = (map['fossGhDisplayValue']?.toString() ?? '')
+        .trim();
+    final fossNhDisplayRaw = (map['fossNhDisplayValue']?.toString() ?? '')
+        .trim();
+    final ghDecimalsRaw = (map['ghDecimals'] as num?)?.toInt() ?? 3;
+    final nhDecimalsRaw = (map['nhDecimals'] as num?)?.toInt() ?? 3;
+    final fossGhDecimalsRaw = (map['fossGhDecimals'] as num?)?.toInt() ?? 3;
+    final fossNhDecimalsRaw = (map['fossNhDecimals'] as num?)?.toInt() ?? 3;
+    final ghDecimals = ghDecimalsRaw < 0
+        ? 0
+        : (ghDecimalsRaw > 6 ? 6 : ghDecimalsRaw);
+    final nhDecimals = nhDecimalsRaw < 0
+        ? 0
+        : (nhDecimalsRaw > 6 ? 6 : nhDecimalsRaw);
+    final fossGhDecimals = fossGhDecimalsRaw < 0
+        ? 0
+        : (fossGhDecimalsRaw > 6 ? 6 : fossGhDecimalsRaw);
+    final fossNhDecimals = fossNhDecimalsRaw < 0
+        ? 0
+        : (fossNhDecimalsRaw > 6 ? 6 : fossNhDecimalsRaw);
+
+    final ghDisplayValue = ghDisplayRaw.isNotEmpty
+        ? ghDisplayRaw
+        : ghNumeric?.toStringAsFixed(ghDecimals);
+    final nhDisplayValue = nhDisplayRaw.isNotEmpty
+        ? nhDisplayRaw
+        : nhNumeric?.toStringAsFixed(nhDecimals);
+    final fossGhDisplayValue = fossGhDisplayRaw.isNotEmpty
+        ? fossGhDisplayRaw
+        : fossGhNumeric?.toStringAsFixed(fossGhDecimals);
+    final fossNhDisplayValue = fossNhDisplayRaw.isNotEmpty
+        ? fossNhDisplayRaw
+        : fossNhNumeric?.toStringAsFixed(fossNhDecimals);
+
+    final mergedGhDisplayValue = ghDisplayValue ?? fossGhDisplayValue;
+    final mergedNhDisplayValue = nhDisplayValue ?? fossNhDisplayValue;
+    final mergedGhLevel = ghLevelRaw.isNotEmpty
+        ? ghLevelRaw
+        : (fossGhLevelRaw.isEmpty ? null : fossGhLevelRaw);
+    final mergedNhLevel = nhLevelRaw.isNotEmpty
+        ? nhLevelRaw
+        : (fossNhLevelRaw.isEmpty ? null : fossNhLevelRaw);
+
     return _HistoryAnalysis(
       modelId: (map['modelId']?.toString() ?? '').trim(),
       modelName: (map['modelName']?.toString() ?? '').trim(),
@@ -840,6 +1183,21 @@ class _HistoryAnalysis {
       displayValue: displayValue,
       units: units,
       primaryValue: primaryValue,
+      ghLabel: ghLabelRaw.isEmpty ? 'GH' : ghLabelRaw,
+      nhLabel: nhLabelRaw.isEmpty ? 'NH' : nhLabelRaw,
+      fossGhLabel: _normalizeDiagnosticLabel(fossGhLabelRaw, fallback: 'GH'),
+      fossNhLabel: _normalizeDiagnosticLabel(fossNhLabelRaw, fallback: 'NH'),
+      fossQLabel: 'Q',
+      ghLevel: mergedGhLevel,
+      nhLevel: mergedNhLevel,
+      ghDisplayValue: mergedGhDisplayValue,
+      nhDisplayValue: mergedNhDisplayValue,
+      fossGhLevel: null,
+      fossNhLevel: null,
+      fossQLevel: null,
+      fossGhDisplayValue: null,
+      fossNhDisplayValue: null,
+      fossQDisplayValue: null,
     );
   }
 
@@ -852,6 +1210,24 @@ class _HistoryAnalysis {
       return '$number%';
     }
     return '$number $units';
+  }
+
+  static String _normalizeDiagnosticLabel(
+    String value, {
+    required String fallback,
+  }) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return fallback;
+    }
+    final normalized = trimmed.toLowerCase().replaceAll(' ', '');
+    if (normalized == 'f-gh') {
+      return 'GH';
+    }
+    if (normalized == 'f-nh') {
+      return 'NH';
+    }
+    return trimmed;
   }
 }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../domain/analyzer.dart';
+import '../../domain/averaging.dart';
 import '../../services/app_state.dart';
 import '../widgets/spectrum_chart.dart';
 
@@ -22,7 +23,8 @@ class AnalyzeScreen extends StatelessWidget {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final isTabletLayout = constraints.maxWidth >= 720;
-              final useSpreadLayout = isTabletLayout && media.viewInsets.bottom == 0;
+              final useSpreadLayout =
+                  isTabletLayout && media.viewInsets.bottom == 0;
               final contentMaxWidth = isTabletLayout ? 760.0 : double.infinity;
               final contentAlignment = Alignment.topCenter;
               final availableHeight = constraints.maxHeight - 20 - bottomInset;
@@ -43,18 +45,36 @@ class AnalyzeScreen extends StatelessWidget {
                 ],
               );
 
+              final acquired = state.acquiredSpectra;
+              final hasMultiple = acquired.length > 1;
               final middleSection = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SpectrumChart(
                     spectrum: state.latestSpectrum,
-                    title: 'Spectrum Preview',
+                    title: hasMultiple
+                        ? 'Averaged spectrum (${acquired.length} scans, ${state.averagingMethod.label})'
+                        : 'Spectrum Preview',
                     axisUnit: state.spectrumAxisUnit,
+                    overlays: hasMultiple ? acquired : const [],
                   ),
+                  if (hasMultiple) ...[
+                    const SizedBox(height: 6),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(
+                        'Faded lines: individual scans. Bold line: averaged.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
-                    child: _AnalysisSummaryCard(results: state.latestAnalysisResults),
+                    child: _AnalysisSummaryCard(
+                      results: state.latestAnalysisResults,
+                      showDiagnostics: state.showGhNhDiagnostics,
+                    ),
                   ),
                 ],
               );
@@ -77,10 +97,11 @@ class AnalyzeScreen extends StatelessWidget {
                             onPressed: state.latestSpectrum == null
                                 ? null
                                 : () async {
-                                    final confirm = await _showSaveConfirmDialog(
-                                      context,
-                                      state,
-                                    );
+                                    final confirm =
+                                        await _showSaveConfirmDialog(
+                                          context,
+                                          state,
+                                        );
                                     if (confirm == null) {
                                       return;
                                     }
@@ -105,7 +126,9 @@ class AnalyzeScreen extends StatelessWidget {
                                       ..showSnackBar(
                                         const SnackBar(
                                           content: Text('Saved'),
-                                          duration: Duration(milliseconds: 1500),
+                                          duration: Duration(
+                                            milliseconds: 1500,
+                                          ),
                                         ),
                                       );
                                   },
@@ -124,7 +147,9 @@ class AnalyzeScreen extends StatelessWidget {
                         SizedBox(height: (minHeight * 0.08).clamp(18.0, 40.0)),
                         middleSection,
                         if (fromScanFlow) ...[
-                          SizedBox(height: (minHeight * 0.06).clamp(14.0, 32.0)),
+                          SizedBox(
+                            height: (minHeight * 0.06).clamp(14.0, 32.0),
+                          ),
                           actionSection,
                         ],
                       ],
@@ -220,9 +245,13 @@ class _SaveConfirmResult {
 }
 
 class _AnalysisSummaryCard extends StatelessWidget {
-  const _AnalysisSummaryCard({required this.results});
+  const _AnalysisSummaryCard({
+    required this.results,
+    required this.showDiagnostics,
+  });
 
   final List<AnalysisResult> results;
+  final bool showDiagnostics;
 
   @override
   Widget build(BuildContext context) {
@@ -240,15 +269,21 @@ class _AnalysisSummaryCard extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodySmall,
               )
             else
-              ...results.map(
-                (result) => Padding(
+              ...results.map((result) {
+                final diagnostics = showDiagnostics
+                    ? result.diagnosticsSummary
+                    : '';
+                final text = diagnostics.isEmpty
+                    ? '${result.label}: ${result.displayValue}'
+                    : '${result.label}: ${result.displayValue} ($diagnostics)';
+                return Padding(
                   padding: const EdgeInsets.only(bottom: 6),
                   child: Text(
-                    '${result.label}: ${result.displayValue}',
+                    text,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
-                ),
-              ),
+                );
+              }),
           ],
         ),
       ),
