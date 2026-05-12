@@ -6,13 +6,31 @@ import '../../domain/averaging.dart';
 import '../../services/app_state.dart';
 import '../widgets/spectrum_chart.dart';
 
-class AnalyzeScreen extends StatelessWidget {
+class AnalyzeScreen extends StatefulWidget {
   const AnalyzeScreen({super.key, this.fromScanFlow = false});
 
   final bool fromScanFlow;
 
   @override
+  State<AnalyzeScreen> createState() => _AnalyzeScreenState();
+}
+
+class _AnalyzeScreenState extends State<AnalyzeScreen> {
+  bool _isSaving = false;
+  bool _isClosing = false;
+
+  void _safePop() {
+    if (_isClosing) return;
+    _isClosing = true;
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final fromScanFlow = widget.fromScanFlow;
     return Consumer<AppState>(
       builder: (context, state, _) {
         final media = MediaQuery.of(context);
@@ -76,22 +94,26 @@ class AnalyzeScreen extends StatelessWidget {
                 ],
               );
 
+              final canInteract = !_isSaving && !_isClosing;
               final actionSection = fromScanFlow
                   ? Row(
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () {
-                              state.discardLatest();
-                              Navigator.pop(context);
-                            },
+                            onPressed: canInteract
+                                ? () {
+                                    state.discardLatest();
+                                    _safePop();
+                                  }
+                                : null,
                             child: const Text('Cancel'),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: ElevatedButton(
-                            onPressed: state.latestSpectrum == null
+                            onPressed:
+                                state.latestSpectrum == null || !canInteract
                                 ? null
                                 : () async {
                                     final confirm =
@@ -99,9 +121,10 @@ class AnalyzeScreen extends StatelessWidget {
                                           context,
                                           state,
                                         );
-                                    if (confirm == null) {
+                                    if (confirm == null || !mounted) {
                                       return;
                                     }
+                                    setState(() => _isSaving = true);
                                     state.updateMaterialName(
                                       confirm.material,
                                       notify: false,
@@ -110,14 +133,20 @@ class AnalyzeScreen extends StatelessWidget {
                                       confirm.sample,
                                       notify: false,
                                     );
-                                    await state.saveSession();
+                                    try {
+                                      await state.saveSession();
+                                    } finally {
+                                      if (mounted) {
+                                        setState(() => _isSaving = false);
+                                      }
+                                    }
                                     if (!context.mounted) {
                                       return;
                                     }
                                     final messenger = ScaffoldMessenger.of(
                                       context,
                                     );
-                                    Navigator.of(context).pop();
+                                    _safePop();
                                     messenger
                                       ..hideCurrentSnackBar()
                                       ..showSnackBar(
@@ -129,7 +158,19 @@ class AnalyzeScreen extends StatelessWidget {
                                         ),
                                       );
                                   },
-                            child: const Text('Save'),
+                            child: _isSaving
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor:
+                                          AlwaysStoppedAnimation<Color>(
+                                            Colors.white,
+                                          ),
+                                    ),
+                                  )
+                                : const Text('Save'),
                           ),
                         ),
                       ],
