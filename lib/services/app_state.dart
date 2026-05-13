@@ -14,7 +14,10 @@ import '../domain/averaging.dart';
 import '../domain/calibration_model.dart';
 import '../domain/measurement.dart';
 import '../domain/spectrum.dart';
+import 'i18n.dart';
 import 'location_service.dart';
+import 'mdns_discovery.dart';
+import 'settings_keys.dart';
 
 class DiscoveredSensor {
   const DiscoveredSensor({
@@ -75,6 +78,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   int currentTab = 0;
   ThemeMode themeMode = ThemeMode.light;
   String spectrumAxisUnit = 'nm';
+  bool onboardingSeen = false;
+  String locale = AppLocale.en;
   bool showConnectScreen = true;
   Timer? _connectDelayTimer;
   String materialName = '';
@@ -85,7 +90,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   int sensorPickerPromptSignal = 0;
   int _discoveryRunId = 0;
   Completer<void>? _activeDiscoveryCompletion;
-  final Set<String> _referenceReadyIps = <String>{};
+  final Map<String, DateTime> _referenceSetAt = <String, DateTime>{};
+  Duration referenceMaxAge = const Duration(hours: 1);
+  bool _mdnsAvailable = true;
   bool _reconnectOnResume = false;
   bool _isLifecycleDisconnecting = false;
   bool _disposed = false;
@@ -112,6 +119,11 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   List<Spectrum> acquiredSpectra = const [];
   int currentScanIndex = 0;
 
+  // Batch mode: keep material name across saves, auto-increment sample suffix.
+  bool batchModeEnabled = false;
+  String batchSamplePrefix = '';
+  int batchSampleCounter = 1;
+
   static const int _minScanCount = 1;
   static const int _maxScanCount = 20;
 
@@ -123,6 +135,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
     targetScanCount = clamped;
+    _persist(SettingsKeys.targetScanCount, '$clamped');
     notifyListeners();
   }
 
@@ -135,6 +148,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       latestSpectrum = averageSpectra(acquiredSpectra, method: averagingMethod);
       _runSelectedModelAnalysis(notify: false);
     }
+    _persist(SettingsKeys.averagingMethod, method.id);
     notifyListeners();
   }
 
@@ -142,11 +156,127 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     await dataStore.init();
     await _loadKnownDevices();
+    await _loadPersistedReferenceState();
+    await _loadPersistedSettings();
     await _loadBundledModels(notify: false);
     notifyListeners();
-    // Kick off discovery in the background so the picker already has live
-    // sensors by the time the user taps INITIALIZE or "Find devices".
     unawaited(discoverSensors());
+  }
+
+  Future<void> markOnboardingSeen() async {
+    onboardingSeen = true;
+    _persist(SettingsKeys.onboardingSeen, 'true');
+    notifyListeners();
+  }
+
+  void setLocale(String value) {
+    if (value == locale) return;
+    locale = value;
+    Strings.instance.setLocale(value);
+    _persist(SettingsKeys.locale, value);
+    notifyListeners();
+  }
+
+  Future<void> _loadPersistedSettings() async {
+    try {
+      final map = await dataStore.loadAllSettings();
+
+      void readInt(String key, void Function(int) apply) {
+        final v = int.tryParse(map[key] ?? '');
+        if (v != null) apply(v);
+      }
+
+      void readString(String key, void Function(String) apply) {
+        final v = map[key];
+        if (v != null) apply(v);
+      }
+
+      void readBool(String key, void Function(bool) apply) {
+        final v = map[key];
+        if (v != null) apply(v == 'true');
+      }
+
+      readBool(SettingsKeys.onboardingSeen, (v) => onboardingSeen = v);
+      readString(SettingsKeys.locale, (v) {
+        if (v == AppLocale.ko || v == AppLocale.en) {
+          locale = v;
+          Strings.instance.setLocale(v);
+        }
+      });
+      readString(SettingsKeys.themeMode, (v) {
+        if (v == 'dark') themeMode = ThemeMode.dark;
+        if (v == 'light') themeMode = ThemeMode.light;
+      });
+      readString(SettingsKeys.spectrumAxisUnit, (v) => spectrumAxisUnit = v);
+      readBool(SettingsKeys.showGhNhDiagnostics,
+          (v) => showGhNhDiagnostics = v);
+      readBool(SettingsKeys.sendLengthPrefix, (v) {
+        sendLengthPrefix = v;
+        client.sendLengthPrefix = v;
+      });
+
+      readInt(SettingsKeys.scanTimeMs, (v) => scanParams.scanTimeMs = v);
+      readInt(SettingsKeys.zeroPadding, (v) => scanParams.zeroPadding = v);
+      readInt(SettingsKeys.commonWavNum, (v) => scanParams.commonWavNum = v);
+      readInt(SettingsKeys.opticalGain, (v) => scanParams.opticalGain = v);
+      readInt(SettingsKeys.apodizationSel,
+          (v) => scanParams.apodizationSel = v);
+
+      readInt(SettingsKeys.targetScanCount, (v) => targetScanCount = v);
+      readString(SettingsKeys.averagingMethod,
+          (v) => averagingMethod = AveragingMethodLabel.fromId(v));
+      readInt(SettingsKeys.referenceMaxAgeMin,
+          (v) => referenceMaxAge = Duration(minutes: v));
+
+      readInt(SettingsKeys.lampsCount, (v) => lampsCount = v);
+      readInt(SettingsKeys.lampSelect, (v) => lampSelect = v);
+      readInt(SettingsKeys.t1, (v) => t1 = v);
+      readInt(SettingsKeys.deltaT, (v) => deltaT = v);
+      readInt(SettingsKeys.t2c1, (v) => t2c1 = v);
+      readInt(SettingsKeys.t2c2, (v) => t2c2 = v);
+      readInt(SettingsKeys.t2max, (v) => t2max = v);
+      readInt(SettingsKeys.opticalGainValue, (v) => opticalGainValue = v);
+    } catch (_) {
+      // Best-effort; defaults stay if any read fails.
+    }
+  }
+
+  void _persist(String key, String value) {
+    unawaited(dataStore.writeSetting(key, value));
+  }
+
+  /// Assign an int field, persist it, and notify — collapses the dozens of
+  /// near-identical `update*` setters below.
+  void _setInt(String key, int value, void Function(int) assign) {
+    assign(value);
+    _persist(key, '$value');
+    notifyListeners();
+  }
+
+  Future<void> _loadPersistedReferenceState() async {
+    try {
+      final saved = await dataStore.listReferenceReadyEntries();
+      // Drop entries older than 2× the current max-age window — anything
+      // beyond that won't be reusable for any plausible threshold setting
+      // and just clutters the table.
+      final cutoff = DateTime.now().subtract(referenceMaxAge * 2);
+      final usable = <String, DateTime>{
+        for (final e in saved.entries)
+          if (e.value.isAfter(cutoff)) e.key: e.value,
+      };
+      // Drop entries we pruned from DB so the table doesn't grow forever.
+      for (final ip in saved.keys) {
+        if (!usable.containsKey(ip)) {
+          unawaited(dataStore.setReferenceReady(ip, false));
+        }
+      }
+      _referenceSetAt
+        ..clear()
+        ..addAll(usable);
+      _syncReferenceFromCurrentIp();
+    } catch (_) {
+      // Best-effort; if persistence fails, fall back to in-memory only.
+    }
   }
 
   Future<void> forgetSavedSensors() async {
@@ -397,6 +527,26 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
 
     try {
+      // Kick mDNS off in parallel with the subnet sweep — until the firmware
+      // advertises, this never resolves anything, so we don't block on it.
+      // Once it returns empty/throws, skip it for the rest of the session.
+      final mdnsFuture = _mdnsAvailable
+          ? discoverViaMdns().catchError((_) => <String>[])
+          : Future<List<String>>.value(const []);
+      unawaited(mdnsFuture.then((ips) {
+        if (ips.isEmpty) {
+          _mdnsAvailable = false;
+          return;
+        }
+        for (final ip in ips) {
+          _registerDiscoveredSensor(
+            DiscoveredSensor(ip: ip, verified: false, fromHistory: false),
+            notify: false,
+          );
+        }
+        notifyListeners();
+      }));
+
       final targets = await _discoveryTargets();
       if (targets.isEmpty) {
         statusMessage = 'No subnet targets found';
@@ -525,6 +675,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> runSpectrum() async {
     if (!isConnected || isScanning || isBackgrounding) return;
+    _syncReferenceFromCurrentIp();
     if (!hasBackground) {
       statusMessage = 'Background required. Tap Set reference.';
       notifyListeners();
@@ -693,6 +844,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     await dataStore.saveMeasurement(measurement);
     await dataStore.saveSpectrum(spectrumBlob);
     statusMessage = 'Session saved';
+    if (batchModeEnabled) {
+      advanceBatchSample();
+    }
     notifyListeners();
   }
 
@@ -813,10 +967,11 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     final ip = currentIp.trim();
     if (ip.isNotEmpty) {
       if (ready) {
-        _referenceReadyIps.add(ip);
+        _referenceSetAt[ip] = DateTime.now();
       } else {
-        _referenceReadyIps.remove(ip);
+        _referenceSetAt.remove(ip);
       }
+      unawaited(dataStore.setReferenceReady(ip, ready));
     }
     hasBackground = ready;
   }
@@ -827,7 +982,36 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       hasBackground = false;
       return;
     }
-    hasBackground = _referenceReadyIps.contains(ip);
+    hasBackground = _isReferenceFresh(ip);
+  }
+
+  bool _isReferenceFresh(String ip) {
+    final setAt = _referenceSetAt[ip];
+    if (setAt == null) return false;
+    return DateTime.now().difference(setAt) <= referenceMaxAge;
+  }
+
+  /// Returns a short label like "12 min ago" or "2 h ago" for the current
+  /// IP's stored reference. Null if no reference is on file.
+  String? get referenceAgeLabel {
+    final setAt = _referenceSetAt[currentIp.trim()];
+    if (setAt == null) return null;
+    final diff = DateTime.now().difference(setAt);
+    if (diff.inSeconds < 60) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+    final hours = diff.inMinutes / 60;
+    if (hours < 10) {
+      return '${hours.toStringAsFixed(1)} h ago';
+    }
+    return '${diff.inHours} h ago';
+  }
+
+  void updateReferenceMaxAge(Duration value) {
+    if (value == referenceMaxAge) return;
+    referenceMaxAge = value;
+    _persist(SettingsKeys.referenceMaxAgeMin, '${value.inMinutes}');
+    _syncReferenceFromCurrentIp();
+    notifyListeners();
   }
 
   Future<void> requestStoragePermission() async {
@@ -837,11 +1021,13 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   void updateSendLengthPrefix(bool value) {
     sendLengthPrefix = value;
     client.sendLengthPrefix = value;
+    _persist(SettingsKeys.sendLengthPrefix, '$value');
     notifyListeners();
   }
 
   void updateShowGhNhDiagnostics(bool value) {
     showGhNhDiagnostics = value;
+    _persist(SettingsKeys.showGhNhDiagnostics, '$value');
     notifyListeners();
   }
 
@@ -859,6 +1045,34 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  void setBatchMode({
+    required bool enabled,
+    String? samplePrefix,
+    int? startCounter,
+  }) {
+    batchModeEnabled = enabled;
+    if (samplePrefix != null) batchSamplePrefix = samplePrefix;
+    if (startCounter != null) batchSampleCounter = startCounter;
+    notifyListeners();
+  }
+
+  /// Called after a successful save in batch mode to advance the sample id.
+  /// Material name stays the same; sample becomes `{prefix}-{counter}`.
+  void advanceBatchSample() {
+    if (!batchModeEnabled) return;
+    batchSampleCounter += 1;
+    sampleName = _formatBatchSampleName();
+    notifyListeners();
+  }
+
+  String _formatBatchSampleName() {
+    final n = batchSampleCounter.toString().padLeft(3, '0');
+    final prefix = batchSamplePrefix.trim().isEmpty
+        ? 'S'
+        : batchSamplePrefix.trim();
+    return '$prefix-$n';
+  }
+
   void setTab(int value) {
     if (currentTab == value) return;
     currentTab = value;
@@ -867,38 +1081,78 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   void setThemeMode(ThemeMode mode) {
     themeMode = mode;
+    _persist(
+      SettingsKeys.themeMode,
+      mode == ThemeMode.dark ? 'dark' : 'light',
+    );
+    notifyListeners();
+  }
+
+  /// Restore all user-tunable settings to their built-in defaults.
+  /// Does not touch saved sensors, history, or models — only preferences.
+  Future<void> resetSettings() async {
+    themeMode = ThemeMode.light;
+    showGhNhDiagnostics = false;
+    spectrumAxisUnit = 'nm';
+
+    sendLengthPrefix = false;
+    client.sendLengthPrefix = false;
+
+    scanParams = ScanParams();
+    targetScanCount = 1;
+    averagingMethod = AveragingMethod.mean;
+    referenceMaxAge = const Duration(hours: 1);
+
+    lampsCount = 2;
+    lampSelect = 0;
+    t1 = 14;
+    deltaT = 2;
+    t2c1 = 5;
+    t2c2 = 35;
+    t2max = 10;
+    opticalGainValue = 0;
+
+    _syncReferenceFromCurrentIp();
+    try {
+      await dataStore.clearAllSettings();
+    } catch (_) {
+      // Best-effort; in-memory state is already reset.
+    }
     notifyListeners();
   }
 
   void updateSpectrumAxisUnit(String unit) {
     spectrumAxisUnit = unit;
+    _persist(SettingsKeys.spectrumAxisUnit, unit);
     notifyListeners();
   }
 
-  void updateScanTime(int value) {
-    scanParams.scanTimeMs = value;
-    notifyListeners();
-  }
+  void updateScanTime(int v) =>
+      _setInt(SettingsKeys.scanTimeMs, v, (x) => scanParams.scanTimeMs = x);
+  void updateZeroPadding(int v) =>
+      _setInt(SettingsKeys.zeroPadding, v, (x) => scanParams.zeroPadding = x);
+  void updateCommonWavNum(int v) =>
+      _setInt(SettingsKeys.commonWavNum, v, (x) => scanParams.commonWavNum = x);
+  void updateOpticalGain(int v) =>
+      _setInt(SettingsKeys.opticalGain, v, (x) => scanParams.opticalGain = x);
+  void updateApodization(int v) => _setInt(
+        SettingsKeys.apodizationSel,
+        v,
+        (x) => scanParams.apodizationSel = x,
+      );
 
-  void updateZeroPadding(int value) {
-    scanParams.zeroPadding = value;
-    notifyListeners();
-  }
-
-  void updateCommonWavNum(int value) {
-    scanParams.commonWavNum = value;
-    notifyListeners();
-  }
-
-  void updateOpticalGain(int value) {
-    scanParams.opticalGain = value;
-    notifyListeners();
-  }
-
-  void updateApodization(int value) {
-    scanParams.apodizationSel = value;
-    notifyListeners();
-  }
+  void updateLampsCount(int v) =>
+      _setInt(SettingsKeys.lampsCount, v, (x) => lampsCount = x);
+  void updateLampSelect(int v) =>
+      _setInt(SettingsKeys.lampSelect, v, (x) => lampSelect = x);
+  void updateT1(int v) => _setInt(SettingsKeys.t1, v, (x) => t1 = x);
+  void updateDeltaT(int v) =>
+      _setInt(SettingsKeys.deltaT, v, (x) => deltaT = x);
+  void updateT2C1(int v) => _setInt(SettingsKeys.t2c1, v, (x) => t2c1 = x);
+  void updateT2C2(int v) => _setInt(SettingsKeys.t2c2, v, (x) => t2c2 = x);
+  void updateT2Max(int v) => _setInt(SettingsKeys.t2max, v, (x) => t2max = x);
+  void updateOpticalGainValue(int v) =>
+      _setInt(SettingsKeys.opticalGainValue, v, (x) => opticalGainValue = x);
 
   Future<void> applySourceSettings() async {
     if (!isConnected) return;

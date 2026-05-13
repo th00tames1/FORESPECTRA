@@ -62,9 +62,17 @@ class _AnalyzeScreenState extends State<AnalyzeScreen> {
 
               final acquired = state.acquiredSpectra;
               final hasMultiple = acquired.length > 1;
+              final outlierBanner = _buildOutlierBanner(
+                context,
+                state.latestAnalysisResults,
+              );
               final middleSection = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (outlierBanner != null) ...[
+                    outlierBanner,
+                    const SizedBox(height: 12),
+                  ],
                   SpectrumChart(
                     spectrum: state.latestSpectrum,
                     title: hasMultiple
@@ -116,21 +124,30 @@ class _AnalyzeScreenState extends State<AnalyzeScreen> {
                                 state.latestSpectrum == null || !canInteract
                                 ? null
                                 : () async {
-                                    final confirm =
-                                        await _showSaveConfirmDialog(
-                                          context,
-                                          state,
-                                        );
-                                    if (confirm == null || !mounted) {
-                                      return;
+                                    final hasNames =
+                                        state.materialName.trim().isNotEmpty &&
+                                        state.sampleName.trim().isNotEmpty;
+                                    String materialOut = state.materialName;
+                                    String sampleOut = state.sampleName;
+                                    if (!hasNames) {
+                                      final confirm =
+                                          await _showSaveConfirmDialog(
+                                            context,
+                                            state,
+                                          );
+                                      if (confirm == null || !mounted) {
+                                        return;
+                                      }
+                                      materialOut = confirm.material;
+                                      sampleOut = confirm.sample;
                                     }
                                     setState(() => _isSaving = true);
                                     state.updateMaterialName(
-                                      confirm.material,
+                                      materialOut,
                                       notify: false,
                                     );
                                     state.updateSampleName(
-                                      confirm.sample,
+                                      sampleOut,
                                       notify: false,
                                     );
                                     try {
@@ -223,6 +240,84 @@ class _AnalyzeScreenState extends State<AnalyzeScreen> {
           ),
         );
       },
+    );
+  }
+
+  /// Returns a prominent warning banner when any analysis result is flagged as
+  /// outlier or warning by the GH/NH diagnostics. Returns null otherwise.
+  Widget? _buildOutlierBanner(
+    BuildContext context,
+    List<AnalysisResult> results,
+  ) {
+    if (results.isEmpty) return null;
+    bool isOutlier = false;
+    bool isWarning = false;
+    final flagged = <String>[];
+    for (final r in results) {
+      for (final level in [r.ghLevel, r.nhLevel]) {
+        if (level == AnalysisResult.levelOutlier) {
+          isOutlier = true;
+          flagged.add(r.label);
+        } else if (level == AnalysisResult.levelWarning) {
+          isWarning = true;
+          if (!flagged.contains(r.label)) flagged.add(r.label);
+        }
+      }
+    }
+    if (!isOutlier && !isWarning) return null;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final color = isOutlier
+        ? const Color(0xFFD03020)
+        : const Color(0xFFC97A0F);
+    final bg = isOutlier
+        ? (isDark ? const Color(0xFF3A1A18) : const Color(0xFFFBE4E4))
+        : (isDark ? const Color(0xFF3A2E14) : const Color(0xFFFAF3D9));
+    final title = isOutlier
+        ? 'Outlier detected'
+        : 'Possible drift';
+    final body = isOutlier
+        ? 'This measurement is unusual versus the calibration set '
+              '(${flagged.join(", ")}). Consider re-scanning or '
+              'verifying the sample.'
+        : 'This measurement is borderline (${flagged.join(", ")}). '
+              'Result may be less reliable.';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            isOutlier ? Icons.error_outline : Icons.warning_amber_outlined,
+            color: color,
+            size: 22,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: color,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  body,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

@@ -29,7 +29,7 @@ class DataStore {
     final path = p.join(dir.path, 'spectra.db');
     _db = await openDatabase(
       path,
-      version: 3,
+      version: 5,
       onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE devices(
@@ -74,6 +74,18 @@ class DataStore {
             y_blob BLOB
           );
         ''');
+        await db.execute('''
+          CREATE TABLE reference_state(
+            ip TEXT PRIMARY KEY,
+            last_set INTEGER
+          );
+        ''');
+        await db.execute('''
+          CREATE TABLE app_settings(
+            key TEXT PRIMARY KEY,
+            value TEXT
+          );
+        ''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -98,6 +110,26 @@ class DataStore {
             await db.execute(
               'ALTER TABLE measurements ADD COLUMN analysis_summary TEXT',
             );
+          } catch (_) {}
+        }
+        if (oldVersion < 4) {
+          try {
+            await db.execute('''
+              CREATE TABLE IF NOT EXISTS reference_state(
+                ip TEXT PRIMARY KEY,
+                last_set INTEGER
+              );
+            ''');
+          } catch (_) {}
+        }
+        if (oldVersion < 5) {
+          try {
+            await db.execute('''
+              CREATE TABLE IF NOT EXISTS app_settings(
+                key TEXT PRIMARY KEY,
+                value TEXT
+              );
+            ''');
           } catch (_) {}
         }
       },
@@ -127,6 +159,62 @@ class DataStore {
 
   Future<void> clearDevices() async {
     await _database.delete('devices');
+  }
+
+  Future<void> setReferenceReady(String ip, bool ready) async {
+    if (ready) {
+      await _database.insert('reference_state', {
+        'ip': ip,
+        'last_set': DateTime.now().millisecondsSinceEpoch,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    } else {
+      await _database.delete(
+        'reference_state',
+        where: 'ip = ?',
+        whereArgs: [ip],
+      );
+    }
+  }
+
+  Future<Map<String, String>> loadAllSettings() async {
+    final rows = await _database.query('app_settings');
+    final result = <String, String>{};
+    for (final row in rows) {
+      final key = row['key'];
+      final value = row['value'];
+      if (key is String && value is String) {
+        result[key] = value;
+      }
+    }
+    return result;
+  }
+
+  Future<void> writeSetting(String key, String value) async {
+    await _database.insert(
+      'app_settings',
+      {'key': key, 'value': value},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> clearAllSettings() async {
+    await _database.delete('app_settings');
+  }
+
+  Future<Map<String, DateTime>> listReferenceReadyEntries() async {
+    final rows = await _database.query(
+      'reference_state',
+      columns: ['ip', 'last_set'],
+    );
+    final result = <String, DateTime>{};
+    for (final row in rows) {
+      final ip = row['ip'];
+      final ts = row['last_set'];
+      if (ip is String && ip.isNotEmpty && ts is int) {
+        result[ip] = DateTime.fromMillisecondsSinceEpoch(ts);
+      }
+    }
+    return result;
   }
 
   Future<List<String>> listRecentDeviceIps({int limit = 12}) async {

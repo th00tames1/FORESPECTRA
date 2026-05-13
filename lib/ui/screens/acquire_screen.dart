@@ -15,6 +15,8 @@ class AcquireScreen extends StatefulWidget {
 class _AcquireScreenState extends State<AcquireScreen> {
   final TextEditingController _materialController = TextEditingController();
   final TextEditingController _sampleController = TextEditingController();
+  final FocusNode _materialFocus = FocusNode();
+  final FocusNode _sampleFocus = FocusNode();
   bool _resultScreenOpen = false;
   bool _initialized = false;
 
@@ -32,6 +34,8 @@ class _AcquireScreenState extends State<AcquireScreen> {
   void dispose() {
     _materialController.dispose();
     _sampleController.dispose();
+    _materialFocus.dispose();
+    _sampleFocus.dispose();
     super.dispose();
   }
 
@@ -39,6 +43,26 @@ class _AcquireScreenState extends State<AcquireScreen> {
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, state, _) {
+        // Don't overwrite while the user is typing — batch-mode sample
+        // bumps come through here too and would jump the caret otherwise.
+        if (!_sampleFocus.hasFocus &&
+            _sampleController.text != state.sampleName) {
+          _sampleController.value = TextEditingValue(
+            text: state.sampleName,
+            selection: TextSelection.collapsed(
+              offset: state.sampleName.length,
+            ),
+          );
+        }
+        if (!_materialFocus.hasFocus &&
+            _materialController.text != state.materialName) {
+          _materialController.value = TextEditingValue(
+            text: state.materialName,
+            selection: TextSelection.collapsed(
+              offset: state.materialName.length,
+            ),
+          );
+        }
         final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
         final minSide = MediaQuery.of(context).size.shortestSide;
         final buttonSize = (minSide * 0.58).clamp(190.0, 240.0);
@@ -134,7 +158,13 @@ class _AcquireScreenState extends State<AcquireScreen> {
           child: OutlinedButton.icon(
             onPressed: state.isConnected && !isBusy ? state.runBackground : null,
             icon: const Icon(Icons.layers),
-            label: Text(state.hasBackground ? 'Reference set' : 'Set reference'),
+            label: Text(
+              state.hasBackground
+                  ? (state.referenceAgeLabel != null
+                        ? 'Reference set (${state.referenceAgeLabel})'
+                        : 'Reference set')
+                  : 'Set reference',
+            ),
           ),
         ),
       ],
@@ -219,6 +249,7 @@ class _AcquireScreenState extends State<AcquireScreen> {
             Expanded(
               child: TextField(
                 controller: _materialController,
+                focusNode: _materialFocus,
                 textInputAction: TextInputAction.next,
                 enabled: state.hasBackground,
                 decoration: const InputDecoration(
@@ -233,15 +264,45 @@ class _AcquireScreenState extends State<AcquireScreen> {
             Expanded(
               child: TextField(
                 controller: _sampleController,
-                enabled: state.hasBackground,
-                decoration: const InputDecoration(
+                focusNode: _sampleFocus,
+                enabled: state.hasBackground && !state.batchModeEnabled,
+                decoration: InputDecoration(
                   labelText: 'Sample name',
-                  hintText: 'e.g. Sample A',
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  hintText: state.batchModeEnabled
+                      ? 'Auto-generated'
+                      : 'e.g. Sample A',
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                 ),
                 onChanged: state.updateSampleName,
               ),
             ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Switch(
+              value: state.batchModeEnabled,
+              onChanged: state.hasBackground
+                  ? (v) => _toggleBatchMode(context, state, v)
+                  : null,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'Batch mode',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const Spacer(),
+            if (state.batchModeEnabled)
+              Text(
+                'Next: ${state.sampleName}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppTheme.muted,
+                ),
+              ),
           ],
         ),
         const SizedBox(height: 16),
@@ -326,6 +387,82 @@ class _AcquireScreenState extends State<AcquireScreen> {
       return;
     }
     await _openResultsScreen(context);
+  }
+
+  Future<void> _toggleBatchMode(
+    BuildContext context,
+    AppState state,
+    bool enabled,
+  ) async {
+    if (!enabled) {
+      state.setBatchMode(enabled: false);
+      return;
+    }
+    final result = await showDialog<_BatchSetup>(
+      context: context,
+      builder: (dialogContext) {
+        var prefix = state.sampleName.trim().isEmpty
+            ? 'S'
+            : state.sampleName.trim();
+        var startStr = '1';
+        return AlertDialog(
+          title: const Text('Start batch mode'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Material stays fixed; sample auto-increments after each save.',
+                style: Theme.of(dialogContext).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                initialValue: prefix,
+                onChanged: (v) => prefix = v,
+                decoration: const InputDecoration(
+                  labelText: 'Sample prefix',
+                  hintText: 'e.g. Pine',
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                initialValue: startStr,
+                keyboardType: TextInputType.number,
+                onChanged: (v) => startStr = v,
+                decoration: const InputDecoration(
+                  labelText: 'Start number',
+                  hintText: '1',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(
+                dialogContext,
+                _BatchSetup(
+                  prefix: prefix.trim(),
+                  start: int.tryParse(startStr) ?? 1,
+                ),
+              ),
+              child: const Text('Start'),
+            ),
+          ],
+        );
+      },
+    );
+    if (result == null) return;
+    state.setBatchMode(
+      enabled: true,
+      samplePrefix: result.prefix.isEmpty ? 'S' : result.prefix,
+      startCounter: result.start,
+    );
+    final firstName = '${result.prefix.isEmpty ? 'S' : result.prefix}-'
+        '${result.start.toString().padLeft(3, '0')}';
+    state.updateSampleName(firstName);
   }
 
   Future<void> _showReferenceRequiredSheet(
@@ -493,3 +630,8 @@ class _AcquireScreenState extends State<AcquireScreen> {
   }
 }
 
+class _BatchSetup {
+  const _BatchSetup({required this.prefix, required this.start});
+  final String prefix;
+  final int start;
+}

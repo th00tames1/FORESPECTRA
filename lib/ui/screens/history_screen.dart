@@ -3,14 +3,17 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../domain/measurement.dart';
 import '../../services/app_state.dart';
 import '../theme/app_theme.dart';
+import 'compare_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -246,6 +249,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 onTap: () => Navigator.pop(sheetContext, 'rename'),
               ),
               ListTile(
+                leading: const Icon(Icons.compare_arrows),
+                title: const Text('Compare with…'),
+                onTap: () => Navigator.pop(sheetContext, 'compare'),
+              ),
+              ListTile(
                 leading: const Icon(Icons.delete_outline),
                 title: const Text('Delete'),
                 onTap: () => Navigator.pop(sheetContext, 'delete'),
@@ -260,6 +268,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
     if (action == 'rename') {
       await _renameItem(item);
+      return;
+    }
+    if (action == 'compare') {
+      await _pickAndCompare(item);
       return;
     }
     if (action == 'delete') {
@@ -386,13 +398,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 ..hideCurrentSnackBar()
                                 ..showSnackBar(
                                   SnackBar(
-                                    content: Text('CSV exported: $path'),
-                                    duration: const Duration(seconds: 2),
+                                    content: Text(
+                                      'CSV saved to ${p.basename(path)}',
+                                    ),
+                                    duration: const Duration(seconds: 5),
+                                    action: SnackBarAction(
+                                      label: 'Share',
+                                      onPressed: () => _shareCsv(path),
+                                    ),
                                   ),
                                 );
                             },
-                      icon: const Icon(Icons.download),
-                      label: const Text('Export selected'),
+                      icon: const Icon(Icons.ios_share),
+                      label: const Text('Export & share'),
                     ),
                   ),
                 ],
@@ -406,7 +424,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Future<String> _exportCsv(List<Measurement> items) async {
     final dataStore = context.read<AppState>().dataStore;
-    final rows = <String>[];
     final prepared = <Map<String, Object?>>[];
     var maxBands = 0;
     var referenceBands = <double>[];
@@ -579,64 +596,66 @@ class _HistoryScreenState extends State<HistoryScreen> {
         header.add('');
       }
     }
-    rows.add(header.map(_csv).join(','));
-
-    for (final entry in prepared) {
-      final item = entry['item'] as Measurement;
-      final analyses = entry['analyses'] as List<_HistoryAnalysis>;
-      final summary = _analysisSummary(analyses);
-      final primary = analyses.isEmpty ? null : analyses.first;
-      final sampleType = entry['sampleType'] as String? ?? 'Spectrum';
-      final commonWave = entry['commonWave'] as String? ?? '';
-      final reflectances = entry['reflectances'] as List<double>;
-      final bandCount = entry['bandCount'] as int;
-
-      final values = <String>[
-        sampleType,
-        item.sampleName ?? '',
-        item.materialName ?? '',
-        item.deviceId,
-        _formatUtc(item.timestamp),
-        _formatScanTimeSeconds(item.scanTimeMs),
-        commonWave,
-        '',
-        item.latitude?.toString() ?? '',
-        item.longitude?.toString() ?? '',
-        summary,
-        primary?.primaryValue ?? '',
-        primary?.units ?? '',
-      ];
-
-      for (final column in analysisColumns.values) {
-        values.add(_analysisValueForColumn(analyses, column.key));
-      }
-
-      for (var i = 0; i < maxBands; i += 1) {
-        if (i < bandCount) {
-          values.add(reflectances[i].toStringAsFixed(6));
-        } else {
-          values.add('');
-        }
-      }
-
-      rows.add(values.map(_csv).join(','));
-    }
     final fileName =
         'history_export_${DateTime.now().millisecondsSinceEpoch}.csv';
-    final content = rows.join('\n');
-
-    final preferredDir = await _resolveCsvDirectory();
-    final preferredPath = p.join(preferredDir.path, fileName);
+    final docsDir = await getApplicationDocumentsDirectory();
+    final filePath = p.join(docsDir.path, fileName);
+    final sink = File(filePath).openWrite();
     try {
-      final file = File(preferredPath);
-      await file.writeAsString(content);
-      return preferredPath;
-    } catch (_) {
-      final fallbackDir = await getApplicationDocumentsDirectory();
-      final fallbackPath = p.join(fallbackDir.path, fileName);
-      final fallbackFile = File(fallbackPath);
-      await fallbackFile.writeAsString(content);
-      return fallbackPath;
+      sink.writeln(header.map(_csv).join(','));
+      for (final entry in prepared) {
+        final item = entry['item'] as Measurement;
+        final analyses = entry['analyses'] as List<_HistoryAnalysis>;
+        final summary = _analysisSummary(analyses);
+        final primary = analyses.isEmpty ? null : analyses.first;
+        final sampleType = entry['sampleType'] as String? ?? 'Spectrum';
+        final commonWave = entry['commonWave'] as String? ?? '';
+        final reflectances = entry['reflectances'] as List<double>;
+        final bandCount = entry['bandCount'] as int;
+
+        final values = <String>[
+          sampleType,
+          item.sampleName ?? '',
+          item.materialName ?? '',
+          item.deviceId,
+          _formatUtc(item.timestamp),
+          _formatScanTimeSeconds(item.scanTimeMs),
+          commonWave,
+          '',
+          item.latitude?.toString() ?? '',
+          item.longitude?.toString() ?? '',
+          summary,
+          primary?.primaryValue ?? '',
+          primary?.units ?? '',
+        ];
+
+        for (final column in analysisColumns.values) {
+          values.add(_analysisValueForColumn(analyses, column.key));
+        }
+
+        for (var i = 0; i < maxBands; i += 1) {
+          values.add(
+            i < bandCount ? reflectances[i].toStringAsFixed(6) : '',
+          );
+        }
+
+        sink.writeln(values.map(_csv).join(','));
+      }
+    } finally {
+      await sink.close();
+    }
+    return filePath;
+  }
+
+  Future<void> _shareCsv(String path) async {
+    try {
+      await Share.shareXFiles(
+        [XFile(path)],
+        subject: 'Spectra CSV export',
+        text: 'Spectra history export from Forespectra.',
+      );
+    } on PlatformException catch (error) {
+      debugPrint('Share sheet failed: $error');
     }
   }
 
@@ -774,25 +793,73 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return 10000000.0 / wavenumber;
   }
 
-  Future<Directory> _resolveCsvDirectory() async {
-    if (Platform.isAndroid) {
-      final publicDownload = Directory('/storage/emulated/0/Download');
-      if (await publicDownload.exists()) {
-        return publicDownload;
-      }
-      final external = await getExternalStorageDirectories(
-        type: StorageDirectory.downloads,
-      );
-      if (external != null && external.isNotEmpty) {
-        return external.first;
-      }
-    }
-    return getApplicationDocumentsDirectory();
-  }
-
   String _csv(String value) {
     final escaped = value.replaceAll('"', '""');
     return '"$escaped"';
+  }
+
+  Future<void> _pickAndCompare(Measurement primary) async {
+    final all = await context.read<AppState>().dataStore.listMeasurements();
+    final candidates = all.where((m) => m.id != primary.id).toList();
+    if (!mounted) return;
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No other scans to compare with.')),
+      );
+      return;
+    }
+    final picked = await showModalBottomSheet<Measurement>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SizedBox(
+          height: MediaQuery.of(sheetContext).size.height * 0.7,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Pick a scan to compare against',
+                  style: Theme.of(sheetContext).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: candidates.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, i) {
+                      final m = candidates[i];
+                      final title = [m.materialName, m.sampleName]
+                          .whereType<String>()
+                          .where((s) => s.isNotEmpty)
+                          .join(' / ');
+                      return ListTile(
+                        title: Text(
+                          title.isEmpty
+                              ? m.id.substring(0, 8)
+                              : title,
+                        ),
+                        subtitle: Text('${m.timestamp}'),
+                        onTap: () => Navigator.pop(sheetContext, m),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (!mounted || picked == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CompareScreen(left: primary, right: picked),
+      ),
+    );
   }
 
   Future<void> _renameItem(Measurement item) async {

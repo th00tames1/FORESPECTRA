@@ -6,6 +6,12 @@ import 'preprocess.dart';
 import 'spectrum.dart';
 
 class AnalysisResult {
+  /// Diagnostic-level string values returned by GH/NH classification.
+  /// Kept as strings (not an enum) so JSON serialization stays stable.
+  static const levelNormal = 'normal';
+  static const levelWarning = 'warning';
+  static const levelOutlier = 'outlier';
+
   AnalysisResult({
     required this.modelId,
     required this.modelName,
@@ -430,16 +436,16 @@ String? _classifyDiagnosticLevel(
     return null;
   }
   if (value <= normalMax) {
-    return 'normal';
+    return AnalysisResult.levelNormal;
   }
   final safeWarning =
       (warningMax != null && warningMax.isFinite && warningMax >= normalMax)
       ? warningMax
       : null;
   if (safeWarning != null && value <= safeWarning) {
-    return 'warning';
+    return AnalysisResult.levelWarning;
   }
-  return 'outlier';
+  return AnalysisResult.levelOutlier;
 }
 
 String? _classifyGhWarningOutlierLevel(
@@ -458,10 +464,10 @@ String? _classifyGhWarningOutlierLevel(
       ? outlierMin
       : null;
   if (safeOutlier != null && value > safeOutlier) {
-    return 'outlier';
+    return AnalysisResult.levelOutlier;
   }
   if (value > warningMin) {
-    return 'warning';
+    return AnalysisResult.levelWarning;
   }
   return null;
 }

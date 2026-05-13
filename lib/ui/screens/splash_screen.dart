@@ -1,8 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../services/app_state.dart';
 import 'home_shell.dart';
+import 'onboarding_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -19,8 +22,12 @@ class _SplashScreenState extends State<SplashScreen> {
     super.initState();
     _timer = Timer(const Duration(seconds: 3), () {
       if (!mounted) return;
+      final seenOnboarding = context.read<AppState>().onboardingSeen;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeShell()),
+        MaterialPageRoute(
+          builder: (_) =>
+              seenOnboarding ? const HomeShell() : const OnboardingScreen(),
+        ),
       );
     });
   }
