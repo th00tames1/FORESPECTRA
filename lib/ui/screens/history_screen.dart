@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../domain/measurement.dart';
 import '../../services/app_state.dart';
+import '../../services/i18n.dart';
 import '../theme/app_theme.dart';
 import 'compare_screen.dart';
 
@@ -63,14 +64,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'History',
+                        t('history.title'),
                         style: Theme.of(context).textTheme.headlineMedium,
                       ),
                       const SizedBox(height: 12),
                       TextField(
-                        decoration: const InputDecoration(
-                          hintText: 'Search by device or session',
-                          prefixIcon: Icon(Icons.search),
+                        decoration: InputDecoration(
+                          hintText: t('history.searchHint'),
+                          prefixIcon: const Icon(Icons.search),
                         ),
                         onChanged: (value) =>
                             setState(() => _query = value.trim()),

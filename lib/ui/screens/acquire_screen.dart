@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/app_state.dart';
+import '../../services/i18n.dart';
 import 'analyze_screen.dart';
 import '../theme/app_theme.dart';
 
@@ -151,7 +152,7 @@ class _AcquireScreenState extends State<AcquireScreen> {
     final topSection = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Scan', style: Theme.of(context).textTheme.headlineMedium),
+        Text(t('scan.title'), style: Theme.of(context).textTheme.headlineMedium),
         const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,
@@ -161,9 +162,9 @@ class _AcquireScreenState extends State<AcquireScreen> {
             label: Text(
               state.hasBackground
                   ? (state.referenceAgeLabel != null
-                        ? 'Reference set (${state.referenceAgeLabel})'
-                        : 'Reference set')
-                  : 'Set reference',
+                        ? '${t('scan.referenceSet')} (${state.referenceAgeLabel})'
+                        : t('scan.referenceSet'))
+                  : t('scan.setReference'),
             ),
           ),
         ),
@@ -214,8 +215,8 @@ class _AcquireScreenState extends State<AcquireScreen> {
                         state.isScanning
                             ? (state.targetScanCount > 1
                                 ? '${state.currentScanIndex}/${state.targetScanCount}'
-                                : 'SCANNING...')
-                            : 'SCAN',
+                                : t('scan.scanning'))
+                            : t('scan.scan'),
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           letterSpacing: 1.2,
                           color: canCapture ? Colors.white : null,
@@ -252,10 +253,13 @@ class _AcquireScreenState extends State<AcquireScreen> {
                 focusNode: _materialFocus,
                 textInputAction: TextInputAction.next,
                 enabled: state.hasBackground,
-                decoration: const InputDecoration(
-                  labelText: 'Material name',
-                  hintText: 'e.g. Pine',
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: InputDecoration(
+                  labelText: t('scan.material'),
+                  hintText: t('scan.materialHint'),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                 ),
                 onChanged: state.updateMaterialName,
               ),
@@ -267,10 +271,10 @@ class _AcquireScreenState extends State<AcquireScreen> {
                 focusNode: _sampleFocus,
                 enabled: state.hasBackground && !state.batchModeEnabled,
                 decoration: InputDecoration(
-                  labelText: 'Sample name',
+                  labelText: t('scan.sample'),
                   hintText: state.batchModeEnabled
-                      ? 'Auto-generated'
-                      : 'e.g. Sample A',
+                      ? t('scan.sampleAuto')
+                      : t('scan.sampleHint'),
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 8,
@@ -292,13 +296,13 @@ class _AcquireScreenState extends State<AcquireScreen> {
             ),
             const SizedBox(width: 4),
             Text(
-              'Batch mode',
+              t('scan.batchMode'),
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const Spacer(),
             if (state.batchModeEnabled)
               Text(
-                'Next: ${state.sampleName}',
+                '${t('scan.next')}: ${state.sampleName}',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppTheme.muted,
                 ),

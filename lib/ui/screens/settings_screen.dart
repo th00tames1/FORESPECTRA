@@ -20,13 +20,12 @@ class SettingsScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Config',
+                  t('config.title'),
                   style: Theme.of(context).textTheme.headlineMedium,
                 ),
                 const SizedBox(height: 16),
 
-                // ── General settings ─────────────────────────────────
-                _sectionLabel(context, 'General'),
+                _sectionLabel(context, t('config.general')),
                 _generalCard(context, state),
                 const SizedBox(height: 12),
                 _displayCard(context, state),
@@ -35,8 +34,7 @@ class SettingsScreen extends StatelessWidget {
 
                 const SizedBox(height: 24),
 
-                // ── Advanced (measurement) ───────────────────────────
-                _sectionLabel(context, 'Advanced'),
+                _sectionLabel(context, t('config.advanced')),
                 _advancedCard(context, state),
 
                 const SizedBox(height: 24),
@@ -77,16 +75,16 @@ class SettingsScreen extends StatelessWidget {
           children: [
             _dropdownField<ThemeMode>(
               context: context,
-              label: 'Theme',
+              label: t('config.theme'),
               value: state.themeMode,
-              items: const [
+              items: [
                 DropdownMenuItem(
                   value: ThemeMode.light,
-                  child: Text('Light mode'),
+                  child: Text(t('config.themeLight')),
                 ),
                 DropdownMenuItem(
                   value: ThemeMode.dark,
-                  child: Text('Dark mode'),
+                  child: Text(t('config.themeDark')),
                 ),
               ],
               onChanged: (value) {
@@ -96,7 +94,7 @@ class SettingsScreen extends StatelessWidget {
             ),
             _dropdownField<String>(
               context: context,
-              label: 'Language',
+              label: t('config.language'),
               value: state.locale,
               items: const [
                 DropdownMenuItem(value: AppLocale.en, child: Text('English')),
@@ -155,14 +153,12 @@ class SettingsScreen extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: ListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Saved sensors'),
-          subtitle: const Text(
-            'Clear stored device IPs from the picker.',
-          ),
+          title: Text(t('config.savedSensors')),
+          subtitle: Text(t('config.savedSensorsSubtitle')),
           trailing: TextButton.icon(
             onPressed: () => _confirmForgetSensors(context, state),
             icon: const Icon(Icons.delete_outline),
-            label: const Text('Clear'),
+            label: Text(t('common.clear')),
           ),
         ),
       ),
@@ -176,8 +172,8 @@ class SettingsScreen extends StatelessWidget {
   Widget _advancedCard(BuildContext context, AppState state) {
     return Card(
       child: ExpansionTile(
-        title: const Text('Measurement settings'),
-        subtitle: const Text('Capture, scan, and device parameters'),
+        title: Text(t('config.measurementSettings')),
+        subtitle: Text(t('config.measurementSubtitle')),
         childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
         children: [
           const SizedBox(height: 6),
@@ -405,14 +401,12 @@ class SettingsScreen extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: ListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Reset to defaults'),
-          subtitle: const Text(
-            'Restore all preferences. Saved sensors and history are kept.',
-          ),
+          title: Text(t('config.resetDefaults')),
+          subtitle: Text(t('config.resetDefaultsSubtitle')),
           trailing: TextButton.icon(
             onPressed: () => _confirmReset(context, state),
             icon: const Icon(Icons.restart_alt),
-            label: const Text('Reset'),
+            label: Text(t('common.reset')),
           ),
         ),
       ),

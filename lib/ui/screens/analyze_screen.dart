@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../domain/analyzer.dart';
 import '../../domain/averaging.dart';
 import '../../services/app_state.dart';
+import '../../services/i18n.dart';
 import '../widgets/spectrum_chart.dart';
 
 class AnalyzeScreen extends StatefulWidget {
@@ -54,7 +55,7 @@ class _AnalyzeScreenState extends State<AnalyzeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Results',
+                    t('results.title'),
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
                 ],
@@ -114,7 +115,7 @@ class _AnalyzeScreenState extends State<AnalyzeScreen> {
                                     _safePop();
                                   }
                                 : null,
-                            child: const Text('Cancel'),
+                            child: Text(t('common.cancel')),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -187,7 +188,7 @@ class _AnalyzeScreenState extends State<AnalyzeScreen> {
                                           ),
                                     ),
                                   )
-                                : const Text('Save'),
+                                : Text(t('common.save')),
                           ),
                         ),
                       ],

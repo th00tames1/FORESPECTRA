@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/app_state.dart';
+import '../../services/i18n.dart';
 import '../theme/app_theme.dart';
 
 class ConnectScreen extends StatefulWidget {
@@ -24,17 +25,17 @@ class _ConnectScreenState extends State<ConnectScreen> {
         final ringColor = isOnline ? AppTheme.success : outlineColor;
         final fillColor = isOnline ? Colors.white : Colors.transparent;
         final title = isConnected
-            ? 'ONLINE'
+            ? t('connect.online')
             : isConnecting
-                ? 'CONNECTING...'
-                : 'INITIALIZE';
+                ? t('connect.connecting')
+                : t('connect.initialize');
         final subtitle = isConnected
             ? state.isVerifyingConnection
                 ? 'Connected. Verifying sensor...'
-                : 'Ready to scan'
+                : t('connect.readyToScan')
             : isConnecting
-                ? 'Looking for your device'
-                : 'Tap to link with the spectrometer';
+                ? t('connect.lookingForDevice')
+                : t('connect.tapToLink');
         return SafeArea(
           bottom: true,
           child: LayoutBuilder(
@@ -159,7 +160,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
                                                   ),
                                                   const SizedBox(width: 6),
                                                   Text(
-                                                    'Sensor Connected',
+                                                    t('connect.sensorConnected'),
                                                     style: Theme.of(context)
                                                         .textTheme
                                                         .labelLarge
@@ -210,7 +211,9 @@ class _ConnectScreenState extends State<ConnectScreen> {
                                         )
                                       : const Icon(Icons.radar),
                                   label: Text(
-                                    isDiscovering ? 'Searching for devices...' : 'Find devices',
+                                    isDiscovering
+                                        ? t('connect.searching')
+                                        : t('connect.findDevices'),
                                   ),
                                 ),
                               ),

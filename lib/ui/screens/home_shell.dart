@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/app_state.dart';
+import '../../services/i18n.dart';
 import '../theme/app_theme.dart';
 import 'acquire_screen.dart';
 import 'connect_screen.dart';
@@ -60,22 +61,22 @@ class _HomeShellState extends State<HomeShell> {
                   state.setTab(value);
                 },
                 destinations: [
-                  const NavigationDestination(
-                    icon: Icon(Icons.power_settings_new),
-                    label: 'Connect',
+                  NavigationDestination(
+                    icon: const Icon(Icons.power_settings_new),
+                    label: t('nav.connect'),
                   ),
                   NavigationDestination(
                     icon: const Icon(Icons.auto_graph),
-                    label: 'Scan',
+                    label: t('nav.scan'),
                     enabled: state.isConnected,
                   ),
-                  const NavigationDestination(
-                    icon: Icon(Icons.history),
-                    label: 'History',
+                  NavigationDestination(
+                    icon: const Icon(Icons.history),
+                    label: t('nav.history'),
                   ),
-                  const NavigationDestination(
-                    icon: Icon(Icons.tune),
-                    label: 'Config',
+                  NavigationDestination(
+                    icon: const Icon(Icons.tune),
+                    label: t('nav.config'),
                   ),
                 ],
               ),
