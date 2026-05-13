@@ -650,10 +650,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Future<void> _shareCsv(String path) async {
     try {
+      // Some receiver apps (especially messengers like KakaoTalk/LINE) ignore
+      // the file attachment when EXTRA_TEXT is present — they treat the share
+      // as a text-only message. Send only the file with an explicit MIME type
+      // so Drive/Files/Gmail etc. all consistently get the attachment.
       await Share.shareXFiles(
-        [XFile(path)],
+        [XFile(path, mimeType: 'text/csv', name: p.basename(path))],
         subject: 'Spectra CSV export',
-        text: 'Spectra history export from Forespectra.',
       );
     } on PlatformException catch (error) {
       debugPrint('Share sheet failed: $error');
