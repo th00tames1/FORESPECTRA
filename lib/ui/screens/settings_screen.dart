@@ -37,8 +37,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _generalCard(context, state),
                 const SizedBox(height: 12),
                 _displayCard(context, state),
-                const SizedBox(height: 12),
-                _savedSensorsCard(context, state),
 
                 const SizedBox(height: 24),
 
@@ -52,8 +50,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const SizedBox(height: 24),
 
-                // ── Reset ────────────────────────────────────────────
+                // Destructive actions are grouped at the bottom so a risky
+                // tap can't happen mid-scroll between routine settings.
                 _resetCard(context, state),
+                const SizedBox(height: 12),
+                _savedSensorsCard(context, state),
 
                 const SizedBox(height: 24),
 
@@ -263,24 +264,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         state.toggleModelSelection(model.id, v == true),
                   ),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          model.name,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _modelOneLineMetric(model),
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      model.name,
+                      style: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
                     ),
                   ),
                   Icon(
@@ -302,18 +289,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
-  }
-
-  String _modelOneLineMetric(CalibrationModel m) {
-    final algo = m.algorithm.isEmpty ? 'Model' : m.algorithm;
-    final pl = m.metricPrimaryLabel;
-    final pv = m.metricPrimaryValue;
-    final sl = m.metricSecondaryLabel;
-    final sv = m.metricSecondaryValue;
-    final parts = <String>[algo];
-    if (pl != null && pv != null) parts.add('$pl $pv');
-    if (sl != null && sv != null) parts.add('$sl $sv');
-    return parts.join('  •  ');
   }
 
   Widget _modelDetails(BuildContext context, CalibrationModel m) {

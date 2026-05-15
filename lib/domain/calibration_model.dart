@@ -786,11 +786,11 @@ class CalibrationModel {
   final double initialValue;
   final double treeWeight;
   // Human-readable model card fields (used by the Config "Models" list).
-  final String algorithm;          // e.g. "Random Forest", "PLS-R"
-  final String description;        // one-line note
-  final String createdAt;          // ISO date (may be empty)
-  final String modelVersion;       // e.g. "1.0 (2026-05-15)"
-  final int? nSamples;             // training set size, if known
+  final String algorithm;
+  final String description;
+  final String createdAt;
+  final String modelVersion;
+  final int? nSamples;
   final String? metricPrimaryLabel;
   final String? metricPrimaryValue;
   final String? metricPrimaryNote;

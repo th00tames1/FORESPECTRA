@@ -17,9 +17,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _controller = PageController();
   int _page = 0;
 
-  static const _pageCount = 4;
-
-  List<_OnboardingStep> get _pages => [
+  late final List<_OnboardingStep> _pages = [
         _OnboardingStep(
           icon: Icons.wifi_tethering,
           title: t('onboarding.title1'),
@@ -49,7 +47,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _next() {
-    if (_page < _pageCount - 1) {
+    if (_page < _pages.length - 1) {
       _controller.nextPage(
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeOut,
@@ -83,12 +81,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Expanded(
               child: PageView.builder(
                 controller: _controller,
-                itemCount: _pageCount,
+                itemCount: _pages.length,
                 onPageChanged: (i) => setState(() => _page = i),
                 itemBuilder: (_, i) => _pages[i],
               ),
             ),
-            _PageDots(count: _pageCount, current: _page),
+            _PageDots(count: _pages.length, current: _page),
             const SizedBox(height: 24),
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
@@ -97,7 +95,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 child: ElevatedButton(
                   onPressed: _next,
                   child: Text(
-                    _page == _pageCount - 1
+                    _page == _pages.length - 1
                         ? t('onboarding.start')
                         : t('common.next'),
                   ),
