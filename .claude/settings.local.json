@@ -3,7 +3,11 @@
     "allow": [
       "Bash(flutter analyze *)",
       "Bash(flutter pub *)",
-      "Bash(flutter test *)"
+      "Bash(flutter test *)",
+      "Bash(ls \"C:/Users/jeonghe/Desktop/Work/Spectral_Analysis/Val/\" 2>&1)",
+      "Bash(ls \"C:/Users/jeonghe/Desktop/Work/Spectral_Analysis/Testcase/\" 2>&1)",
+      "Bash(python -c \"import pandas as pd; df=pd.read_csv\\(r'C:\\\\Users\\\\jeonghe\\\\Desktop\\\\Work\\\\Spectral_Analysis\\\\Val\\\\Soil.csv'\\); print\\('shape', df.shape\\); print\\('cols head', df.columns[:15].tolist\\(\\)\\); print\\('cols tail', df.columns[-3:].tolist\\(\\)\\); print\\(df[['Sample Name','Material Name','BeforeDry\\(g\\)']].head\\(8\\)\\)\")",
+      "Bash(python -c ' *)"
     ]
   }
 }

@@ -188,6 +188,72 @@ AnalysisResult runAnalysis(Spectrum spectrum, CalibrationModel model) {
     config: model.fossGhNhConfig,
   );
 
+  if (model.isTreeEnsemble && model.trees.isNotEmpty) {
+    var total = model.initialValue;
+    final w = model.treeWeight;
+    for (final tree in model.trees) {
+      total += w * tree.predict(processed.y);
+    }
+    return AnalysisResult(
+      modelId: model.id,
+      modelName: model.name,
+      label: model.label,
+      displayValue: _formatNumeric(total, model.units),
+      units: model.units,
+      numericValue: total,
+      rawScore: total,
+      gh: ghNh.gh,
+      nh: ghNh.nh,
+      ghLevel: ghNh.ghLevel,
+      nhLevel: ghNh.nhLevel,
+      ghLabel: ghNh.ghLabel,
+      nhLabel: ghNh.nhLabel,
+      ghDecimals: ghNh.ghDecimals,
+      nhDecimals: ghNh.nhDecimals,
+    );
+  }
+
+  if (model.isMultiClass && model.coefficientsByClass.isNotEmpty) {
+    final classes = model.classes;
+    final heads = model.coefficientsByClass;
+    final intercepts = model.interceptsByClass;
+    var bestIdx = 0;
+    var bestScore = double.negativeInfinity;
+    for (var k = 0; k < heads.length; k++) {
+      final coef = heads[k];
+      final len = min(processed.y.length, coef.length);
+      var s = k < intercepts.length ? intercepts[k] : 0.0;
+      for (var i = 0; i < len; i++) {
+        s += processed.y[i] * coef[i];
+      }
+      if (s > bestScore) {
+        bestScore = s;
+        bestIdx = k;
+      }
+    }
+    final safeIdx = bestIdx.clamp(0, classes.isEmpty ? 0 : classes.length - 1);
+    final predictedLabel = classes.isEmpty
+        ? 'Class $bestIdx'
+        : _humanizeClassLabel(classes[safeIdx]);
+    return AnalysisResult(
+      modelId: model.id,
+      modelName: model.name,
+      label: model.label,
+      displayValue: predictedLabel,
+      units: '',
+      numericValue: null,
+      rawScore: bestScore,
+      gh: ghNh.gh,
+      nh: ghNh.nh,
+      ghLevel: ghNh.ghLevel,
+      nhLevel: ghNh.nhLevel,
+      ghLabel: ghNh.ghLabel,
+      nhLabel: ghNh.nhLabel,
+      ghDecimals: ghNh.ghDecimals,
+      nhDecimals: ghNh.nhDecimals,
+    );
+  }
+
   if (model.isClassification) {
     final threshold = model.threshold ?? 0.5;
     final positiveIndex = model.positiveClassIndex ?? 1;

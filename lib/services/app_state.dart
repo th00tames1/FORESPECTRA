@@ -56,6 +56,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   static const List<String> _bundledModelAssetPaths = [
     'assets/models/species_model.json',
     'assets/models/moisture_model.json',
+    'assets/models/leaves_species_model.json',
+    'assets/models/leaves_moisture_model.json',
+    'assets/models/soil_water_content_model.json',
+    'assets/models/soil_organic_matter_model.json',
   ];
 
   final SiNirClient client = SiNirClient();

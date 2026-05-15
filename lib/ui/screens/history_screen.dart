@@ -580,12 +580,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
       'Created At (UTC)',
       'Scan Time',
       'Common Wave Number',
-      'Device Temperature',
       'Latitude',
       'Longitude',
       'Analysis Summary',
-      'Analysis Value',
-      'Analysis Units',
     ];
     for (final column in analysisColumns.values) {
       header.add(column.header);
@@ -603,12 +600,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final filePath = p.join(docsDir.path, fileName);
     final sink = File(filePath).openWrite();
     try {
+      // UTF-8 BOM so Excel/Sheets auto-detect encoding and don't mangle
+      // non-ASCII characters (Korean material names, em-dashes, etc.).
+      sink.write('﻿');
       sink.writeln(header.map(_csv).join(','));
       for (final entry in prepared) {
         final item = entry['item'] as Measurement;
         final analyses = entry['analyses'] as List<_HistoryAnalysis>;
         final summary = _analysisSummary(analyses);
-        final primary = analyses.isEmpty ? null : analyses.first;
         final sampleType = entry['sampleType'] as String? ?? 'Spectrum';
         final commonWave = entry['commonWave'] as String? ?? '';
         final reflectances = entry['reflectances'] as List<double>;
@@ -622,12 +621,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
           _formatUtc(item.timestamp),
           _formatScanTimeSeconds(item.scanTimeMs),
           commonWave,
-          '',
           item.latitude?.toString() ?? '',
           item.longitude?.toString() ?? '',
           summary,
-          primary?.primaryValue ?? '',
-          primary?.units ?? '',
         ];
 
         for (final column in analysisColumns.values) {
@@ -702,7 +698,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   String _analysisSummary(List<_HistoryAnalysis> analyses) {
     if (analyses.isEmpty) {
-      return '—';
+      return '';
     }
     return analyses
         .map((analysis) => '${analysis.label}: ${analysis.displayValue}')

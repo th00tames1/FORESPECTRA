@@ -667,6 +667,58 @@ List<List<double>> _parseFiniteDoubleMatrix(List<dynamic>? raw) {
   return parsed;
 }
 
+/// Compact node-array decision tree (regression). Each entry index `i`
+/// describes one node. Leaf nodes have `feature[i] == -1`.
+class DecisionTreeNodes {
+  DecisionTreeNodes({
+    required this.feature,
+    required this.threshold,
+    required this.value,
+    required this.left,
+    required this.right,
+  });
+
+  final Int32List feature;
+  final Float64List threshold;
+  final Float64List value;
+  final Int32List left;
+  final Int32List right;
+
+  /// Traverse from root (idx 0) using a standardized spectrum `x`.
+  double predict(Float64List x) {
+    var idx = 0;
+    final maxFeat = x.length;
+    while (true) {
+      final f = feature[idx];
+      if (f < 0) {
+        return value[idx];
+      }
+      final xv = f < maxFeat ? x[f] : 0.0;
+      idx = xv <= threshold[idx] ? left[idx] : right[idx];
+    }
+  }
+
+  static DecisionTreeNodes fromJsonMap(Map<String, dynamic> map) {
+    Int32List intList(String key) {
+      final raw = (map[key] as List<dynamic>?) ?? const [];
+      return Int32List.fromList(raw.map((e) => (e as num).toInt()).toList());
+    }
+    Float64List doubleList(String key) {
+      final raw = (map[key] as List<dynamic>?) ?? const [];
+      return Float64List.fromList(
+        raw.map((e) => (e as num).toDouble()).toList(),
+      );
+    }
+    return DecisionTreeNodes(
+      feature: intList('feature'),
+      threshold: doubleList('threshold'),
+      value: doubleList('value'),
+      left: intList('left'),
+      right: intList('right'),
+    );
+  }
+}
+
 class CalibrationModel {
   CalibrationModel({
     required this.id,
@@ -687,6 +739,11 @@ class CalibrationModel {
     this.axisUnit = '',
     this.ghNhConfig,
     this.fossGhNhConfig,
+    this.coefficientsByClass = const [],
+    this.interceptsByClass = const [],
+    this.trees = const [],
+    this.initialValue = 0.0,
+    this.treeWeight = 1.0,
   });
 
   final String id;
@@ -707,8 +764,21 @@ class CalibrationModel {
   final String axisUnit;
   final GhNhConfig? ghNhConfig;
   final FossGhNhConfig? fossGhNhConfig;
+  // Multi-class PLS-DA: per-class linear head. Each entry is a coefficient
+  // vector (same length as `coefficients`); paired intercepts in
+  // [interceptsByClass]. Argmax over the per-class scores picks the class.
+  final List<Float64List> coefficientsByClass;
+  final List<double> interceptsByClass;
+  // Tree-ensemble regression (RF / GBM): each tree stored as parallel
+  // arrays; aggregation is `initialValue + treeWeight * Σ tree.predict(x)`.
+  final List<DecisionTreeNodes> trees;
+  final double initialValue;
+  final double treeWeight;
 
-  bool get isClassification => modelType == 'pls_da_binary';
+  bool get isClassification =>
+      modelType == 'pls_da_binary' || modelType == 'pls_da_multi';
+  bool get isMultiClass => modelType == 'pls_da_multi';
+  bool get isTreeEnsemble => modelType == 'tree_ensemble_regression';
 
   bool get hasStandardScaler =>
       scalerMean != null &&
@@ -717,9 +787,12 @@ class CalibrationModel {
 
   factory CalibrationModel.fromJson(String jsonText) {
     final jsonMap = jsonDecode(jsonText) as Map<String, dynamic>;
-    final isDeployModel =
-        jsonMap.containsKey('linear_head') && jsonMap.containsKey('scaler');
-    if (isDeployModel) {
+    final hasScaler = jsonMap.containsKey('scaler');
+    final hasHead =
+        jsonMap.containsKey('linear_head') ||
+        jsonMap.containsKey('linear_heads') ||
+        jsonMap.containsKey('trees');
+    if (hasHead && hasScaler) {
       return CalibrationModel._fromDeployJson(jsonMap);
     }
     return CalibrationModel._fromLegacyJson(jsonMap);
@@ -768,7 +841,32 @@ class CalibrationModel {
       (jsonMap['preprocessing'] as Map?) ?? const <String, dynamic>{},
     );
 
-    final coeffs = _asDoubleList(linearHead['coef'] as List<dynamic>?);
+    // Tree-ensemble regression: parse the per-tree node arrays.
+    final treesRaw = (jsonMap['trees'] as List<dynamic>?) ?? const [];
+    final trees = <DecisionTreeNodes>[
+      for (final t in treesRaw)
+        if (t is Map) DecisionTreeNodes.fromJsonMap(Map<String, dynamic>.from(t)),
+    ];
+    final initialValue =
+        (jsonMap['initial_value'] as num?)?.toDouble() ?? 0.0;
+    final treeWeight = (jsonMap['tree_weight'] as num?)?.toDouble() ?? 1.0;
+
+    final headsRaw = (jsonMap['linear_heads'] as List<dynamic>?) ?? const [];
+    final coefficientsByClass = <Float64List>[];
+    final interceptsByClass = <double>[];
+    for (final h in headsRaw) {
+      if (h is Map) {
+        final cMap = Map<String, dynamic>.from(h);
+        final coef = _asDoubleList(cMap['coef'] as List<dynamic>?);
+        coefficientsByClass.add(Float64List.fromList(coef));
+        interceptsByClass.add((cMap['intercept'] as num?)?.toDouble() ?? 0);
+      }
+    }
+    // Fall back to the binary linear_head if linear_heads is absent.
+    // For tree ensembles `coefficients` is empty — analyzer routes by type.
+    final coeffs = coefficientsByClass.isNotEmpty
+        ? coefficientsByClass.first.toList()
+        : _asDoubleList(linearHead['coef'] as List<dynamic>?);
     final xAxis = _asDoubleList(jsonMap['wavenumbers'] as List<dynamic>?);
     final scalerMean = _asDoubleList(scaler['mean'] as List<dynamic>?);
     final scalerScale = _asDoubleList(scaler['scale'] as List<dynamic>?);
@@ -881,14 +979,20 @@ class CalibrationModel {
         .map((e) => e.toString())
         .toList(growable: false);
 
+    final expectedLength = coeffs.isNotEmpty
+        ? coeffs.length
+        : (scalerMean.isNotEmpty ? scalerMean.length : xAxis.length);
+
     return CalibrationModel(
       id: id,
       name: name,
       coefficients: Float64List.fromList(coeffs),
-      intercept: (linearHead['intercept'] as num?)?.toDouble() ?? 0,
+      intercept: coefficientsByClass.isNotEmpty
+          ? interceptsByClass.first
+          : (linearHead['intercept'] as num?)?.toDouble() ?? 0,
       units: units,
       label: label,
-      expectedLength: coeffs.length,
+      expectedLength: expectedLength,
       preprocessSteps: preprocessSteps,
       xAxis: xAxis,
       modelType: modelType,
@@ -902,6 +1006,11 @@ class CalibrationModel {
       axisUnit: axisUnit,
       ghNhConfig: ghNhConfig,
       fossGhNhConfig: fossGhNhConfig,
+      coefficientsByClass: coefficientsByClass,
+      interceptsByClass: interceptsByClass,
+      trees: trees,
+      initialValue: initialValue,
+      treeWeight: treeWeight,
     );
   }
 
