@@ -2,11 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../domain/averaging.dart';
+import '../../domain/calibration_model.dart';
 import '../../services/app_state.dart';
 import '../../services/i18n.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  final Set<String> _expandedModelIds = <String>{};
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +42,11 @@ class SettingsScreen extends StatelessWidget {
 
                 const SizedBox(height: 24),
 
+                _sectionLabel(context, t('config.models')),
+                _modelsCard(context, state),
+
+                const SizedBox(height: 24),
+
                 _sectionLabel(context, t('config.advanced')),
                 _advancedCard(context, state),
 
@@ -41,6 +54,11 @@ class SettingsScreen extends StatelessWidget {
 
                 // ── Reset ────────────────────────────────────────────
                 _resetCard(context, state),
+
+                const SizedBox(height: 24),
+
+                _sectionLabel(context, t('config.about')),
+                _aboutCard(context),
               ],
             ),
           ),
@@ -120,7 +138,7 @@ class SettingsScreen extends StatelessWidget {
           children: [
             _dropdownField<String>(
               context: context,
-              label: 'Spectrum axis unit',
+              label: t('config.axisUnit'),
               value: state.spectrumAxisUnit,
               items: const [
                 DropdownMenuItem(value: 'DN', child: Text('DN')),
@@ -136,10 +154,8 @@ class SettingsScreen extends StatelessWidget {
               contentPadding: EdgeInsets.zero,
               value: state.showGhNhDiagnostics,
               onChanged: state.updateShowGhNhDiagnostics,
-              title: const Text('Show GH/NH diagnostics'),
-              subtitle: const Text(
-                'Display model diagnostics next to predictions.',
-              ),
+              title: Text(t('config.showDiagnostics')),
+              subtitle: Text(t('config.showDiagnosticsSubtitle')),
             ),
           ],
         ),
@@ -166,6 +182,222 @@ class SettingsScreen extends StatelessWidget {
   }
 
   // ─────────────────────────────────────────────────────────────────
+  // Models card — toggle which models the Scan flow runs, expand each
+  // row to see algorithm + CV metrics + dataset info.
+  // ─────────────────────────────────────────────────────────────────
+
+  Widget _modelsCard(BuildContext context, AppState state) {
+    final models = state.availableModels;
+    if (models.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            t('config.modelsNone'),
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ),
+      );
+    }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 10, 8, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      t('config.modelsHint'),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            ...models.map((m) => _modelRow(context, state, m)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _modelRow(
+    BuildContext context,
+    AppState state,
+    CalibrationModel model,
+  ) {
+    final isExpanded = _expandedModelIds.contains(model.id);
+    final isSelected = state.isModelSelected(model.id);
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: Theme.of(context).colorScheme.outline,
+            width: 0.6,
+          ),
+        ),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () => setState(() {
+              if (isExpanded) {
+                _expandedModelIds.remove(model.id);
+              } else {
+                _expandedModelIds.add(model.id);
+              }
+            }),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(
+                children: [
+                  Checkbox(
+                    value: isSelected,
+                    onChanged: (v) =>
+                        state.toggleModelSelection(model.id, v == true),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          model.name,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _modelOneLineMetric(model),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    isExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            child: isExpanded
+                ? _modelDetails(context, model)
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _modelOneLineMetric(CalibrationModel m) {
+    final algo = m.algorithm.isEmpty ? 'Model' : m.algorithm;
+    final pl = m.metricPrimaryLabel;
+    final pv = m.metricPrimaryValue;
+    final sl = m.metricSecondaryLabel;
+    final sv = m.metricSecondaryValue;
+    final parts = <String>[algo];
+    if (pl != null && pv != null) parts.add('$pl $pv');
+    if (sl != null && sv != null) parts.add('$sl $sv');
+    return parts.join('  •  ');
+  }
+
+  Widget _modelDetails(BuildContext context, CalibrationModel m) {
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    final rows = <Widget>[];
+
+    void addRow(String label, String? value, {String? note}) {
+      if (value == null || value.isEmpty) return;
+      rows.add(Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 100,
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.labelSmall
+                    ?.copyWith(color: muted, letterSpacing: 0.4),
+              ),
+            ),
+            Expanded(
+              child: RichText(
+                text: TextSpan(
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: Theme.of(context).colorScheme.onSurface),
+                  children: [
+                    TextSpan(text: value),
+                    if (note != null && note.isNotEmpty)
+                      TextSpan(
+                        text: '   $note',
+                        style: TextStyle(color: muted, fontStyle: FontStyle.italic),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ));
+    }
+
+    addRow(t('config.rowAlgorithm'), m.algorithm.isEmpty ? '—' : m.algorithm);
+    addRow(t('config.rowClasses'),
+        m.classes.isEmpty ? null : m.classes.join(', '));
+    addRow(m.metricPrimaryLabel ?? '', m.metricPrimaryValue,
+        note: m.metricPrimaryNote);
+    addRow(m.metricSecondaryLabel ?? '', m.metricSecondaryValue,
+        note: m.metricSecondaryNote);
+    addRow(t('config.rowSamples'), m.nSamples?.toString());
+    addRow(t('config.rowVersion'),
+        m.modelVersion.isEmpty ? null : m.modelVersion);
+    addRow(t('config.rowDate'), _formatDate(m.createdAt));
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(48, 0, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (m.description.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                m.description,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: muted,
+                  height: 1.4,
+                ),
+              ),
+            ),
+          ...rows,
+        ],
+      ),
+    );
+  }
+
+  String? _formatDate(String iso) {
+    if (iso.isEmpty) return null;
+    // Keep just YYYY-MM-DD; ISO timestamps look like 2026-02-19T18:24:06.
+    final t = iso.indexOf('T');
+    return t > 0 ? iso.substring(0, t) : iso;
+  }
+
+  // ─────────────────────────────────────────────────────────────────
   // Advanced (measurement)
   // ─────────────────────────────────────────────────────────────────
 
@@ -177,10 +409,10 @@ class SettingsScreen extends StatelessWidget {
         childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
         children: [
           const SizedBox(height: 6),
-          _subHeader(context, 'Capture'),
+          _subHeader(context, t('config.capture')),
           _sliderField(
             context: context,
-            label: 'Scans per capture',
+            label: t('config.scansPerCapture'),
             value: state.targetScanCount.toDouble(),
             min: 1,
             max: 20,
@@ -189,7 +421,7 @@ class SettingsScreen extends StatelessWidget {
           ),
           _dropdownField<AveragingMethod>(
             context: context,
-            label: 'Combine method',
+            label: t('config.combineMethod'),
             value: state.averagingMethod,
             items: AveragingMethod.values
                 .map(
@@ -203,28 +435,28 @@ class SettingsScreen extends StatelessWidget {
           ),
           _dropdownField<Duration>(
             context: context,
-            label: 'Reference auto-expire',
+            label: t('config.referenceExpire'),
             value: state.referenceMaxAge,
-            items: const [
+            items: [
               DropdownMenuItem(
-                value: Duration(minutes: 30),
-                child: Text('30 min'),
+                value: const Duration(minutes: 30),
+                child: Text(t('config.expire30min')),
               ),
               DropdownMenuItem(
-                value: Duration(hours: 1),
-                child: Text('1 hour'),
+                value: const Duration(hours: 1),
+                child: Text(t('config.expire1h')),
               ),
               DropdownMenuItem(
-                value: Duration(hours: 2),
-                child: Text('2 hours'),
+                value: const Duration(hours: 2),
+                child: Text(t('config.expire2h')),
               ),
               DropdownMenuItem(
-                value: Duration(hours: 4),
-                child: Text('4 hours'),
+                value: const Duration(hours: 4),
+                child: Text(t('config.expire4h')),
               ),
               DropdownMenuItem(
-                value: Duration(hours: 8),
-                child: Text('8 hours'),
+                value: const Duration(hours: 8),
+                child: Text(t('config.expire8h')),
               ),
             ],
             onChanged: (value) {
@@ -234,10 +466,10 @@ class SettingsScreen extends StatelessWidget {
           ),
 
           const SizedBox(height: 8),
-          _subHeader(context, 'Scan parameters'),
+          _subHeader(context, t('config.scanParams')),
           _sliderField(
             context: context,
-            label: 'Scan time (ms)',
+            label: t('config.scanTimeMs'),
             value: state.scanParams.scanTimeMs.toDouble(),
             min: 10,
             max: 224,
@@ -245,12 +477,13 @@ class SettingsScreen extends StatelessWidget {
           ),
           _dropdownField<int>(
             context: context,
-            label: 'Resolution preset',
+            label: t('config.resolutionPreset'),
             value: state.scanParams.zeroPadding,
-            items: const [
-              DropdownMenuItem(value: 1, child: Text('Fast')),
-              DropdownMenuItem(value: 2, child: Text('Balanced')),
-              DropdownMenuItem(value: 3, child: Text('High detail')),
+            items: [
+              DropdownMenuItem(value: 1, child: Text(t('config.presetFast'))),
+              DropdownMenuItem(
+                  value: 2, child: Text(t('config.presetBalanced'))),
+              DropdownMenuItem(value: 3, child: Text(t('config.presetHigh'))),
             ],
             onChanged: (value) {
               if (value == null) return;
@@ -259,7 +492,7 @@ class SettingsScreen extends StatelessWidget {
           ),
           _dropdownField<int>(
             context: context,
-            label: 'Data points',
+            label: t('config.dataPoints'),
             value: state.scanParams.commonWavNum,
             items: const [
               DropdownMenuItem(value: 1, child: Text('65')),
@@ -277,12 +510,13 @@ class SettingsScreen extends StatelessWidget {
           ),
           _dropdownField<int>(
             context: context,
-            label: 'Optical gain mode',
+            label: t('config.opticalGainMode'),
             value: state.scanParams.opticalGain,
-            items: const [
-              DropdownMenuItem(value: 0, child: Text('Automatic')),
-              DropdownMenuItem(value: 1, child: Text('Calculated')),
-              DropdownMenuItem(value: 2, child: Text('External')),
+            items: [
+              DropdownMenuItem(value: 0, child: Text(t('config.gainAuto'))),
+              DropdownMenuItem(
+                  value: 1, child: Text(t('config.gainCalculated'))),
+              DropdownMenuItem(value: 2, child: Text(t('config.gainExternal'))),
             ],
             onChanged: (value) {
               if (value == null) return;
@@ -291,13 +525,13 @@ class SettingsScreen extends StatelessWidget {
           ),
           _dropdownField<int>(
             context: context,
-            label: 'Smoothing',
+            label: t('config.smoothing'),
             value: state.scanParams.apodizationSel,
-            items: const [
-              DropdownMenuItem(value: 0, child: Text('None')),
-              DropdownMenuItem(value: 1, child: Text('Soft')),
-              DropdownMenuItem(value: 2, child: Text('Medium')),
-              DropdownMenuItem(value: 3, child: Text('Strong')),
+            items: [
+              DropdownMenuItem(value: 0, child: Text(t('config.smoothNone'))),
+              DropdownMenuItem(value: 1, child: Text(t('config.smoothSoft'))),
+              DropdownMenuItem(value: 2, child: Text(t('config.smoothMedium'))),
+              DropdownMenuItem(value: 3, child: Text(t('config.smoothStrong'))),
             ],
             onChanged: (value) {
               if (value == null) return;
@@ -306,42 +540,42 @@ class SettingsScreen extends StatelessWidget {
           ),
 
           const SizedBox(height: 8),
-          _subHeader(context, 'Source / lamps'),
+          _subHeader(context, t('config.sourceLamps')),
           _numberField(
-            label: 'Lamps count',
+            label: t('config.lampsCount'),
             initialValue: state.lampsCount.toString(),
             onChanged: (v) =>
                 state.updateLampsCount(int.tryParse(v) ?? state.lampsCount),
           ),
           _numberField(
-            label: 'Lamp select',
+            label: t('config.lampSelect'),
             initialValue: state.lampSelect.toString(),
             onChanged: (v) =>
                 state.updateLampSelect(int.tryParse(v) ?? state.lampSelect),
           ),
           _numberField(
-            label: 'T1',
+            label: t('config.t1'),
             initialValue: state.t1.toString(),
             onChanged: (v) => state.updateT1(int.tryParse(v) ?? state.t1),
           ),
           _numberField(
-            label: 'Delta T',
+            label: t('config.deltaT'),
             initialValue: state.deltaT.toString(),
             onChanged: (v) =>
                 state.updateDeltaT(int.tryParse(v) ?? state.deltaT),
           ),
           _numberField(
-            label: 'T2 C1',
+            label: t('config.t2c1'),
             initialValue: state.t2c1.toString(),
             onChanged: (v) => state.updateT2C1(int.tryParse(v) ?? state.t2c1),
           ),
           _numberField(
-            label: 'T2 C2',
+            label: t('config.t2c2'),
             initialValue: state.t2c2.toString(),
             onChanged: (v) => state.updateT2C2(int.tryParse(v) ?? state.t2c2),
           ),
           _numberField(
-            label: 'T2 max',
+            label: t('config.t2max'),
             initialValue: state.t2max.toString(),
             onChanged: (v) =>
                 state.updateT2Max(int.tryParse(v) ?? state.t2max),
@@ -353,14 +587,14 @@ class SettingsScreen extends StatelessWidget {
               onPressed:
                   state.isConnected ? state.applySourceSettings : null,
               icon: const Icon(Icons.tune),
-              label: const Text('Apply source settings'),
+              label: Text(t('config.applySource')),
             ),
           ),
 
           const SizedBox(height: 12),
-          _subHeader(context, 'Manual optical gain'),
+          _subHeader(context, t('config.manualGain')),
           _numberField(
-            label: 'Gain value',
+            label: t('config.gainValue'),
             initialValue: state.opticalGainValue.toString(),
             onChanged: (v) => state.updateOpticalGainValue(
               int.tryParse(v) ?? state.opticalGainValue,
@@ -373,18 +607,18 @@ class SettingsScreen extends StatelessWidget {
               onPressed:
                   state.isConnected ? state.applyOpticalSettings : null,
               icon: const Icon(Icons.auto_fix_high),
-              label: const Text('Apply gain'),
+              label: Text(t('config.applyGain')),
             ),
           ),
 
           const SizedBox(height: 12),
-          _subHeader(context, 'Developer'),
+          _subHeader(context, t('config.developer')),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             value: state.sendLengthPrefix,
             onChanged: state.updateSendLengthPrefix,
-            title: const Text('Enable packet prefix'),
-            subtitle: const Text('Use only if support requests it.'),
+            title: Text(t('config.packetPrefix')),
+            subtitle: Text(t('config.packetPrefixSubtitle')),
           ),
         ],
       ),
@@ -413,29 +647,72 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  Widget _aboutCard(BuildContext context) {
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    final ink = Theme.of(context).colorScheme.onSurface;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              'Forespectra',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Heechan Jeong',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: ink,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Advanced Forestry Systems Lab',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: muted,
+              ),
+            ),
+            Text(
+              'Oregon State University',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: muted,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '© 2026 Heechan Jeong. All rights reserved.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: muted,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _confirmReset(BuildContext context, AppState state) {
     return _confirmAndRun(
       context: context,
-      title: 'Reset all settings?',
-      body: 'Theme, display options, and all measurement parameters will be '
-          'restored to their defaults. Saved sensors, scan history, and '
-          'models are not affected.',
-      confirmLabel: 'Reset',
+      title: t('config.resetTitle'),
+      body: t('config.resetBody'),
+      confirmLabel: t('common.reset'),
       action: state.resetSettings,
-      doneMessage: 'Settings restored to defaults',
+      doneMessage: t('config.resetDone'),
     );
   }
 
   Future<void> _confirmForgetSensors(BuildContext context, AppState state) {
     return _confirmAndRun(
       context: context,
-      title: 'Clear saved sensors?',
-      body: 'All stored device IPs will be removed from the picker. The '
-          'current connection is unaffected. Discovery will find them '
-          'again next time.',
-      confirmLabel: 'Clear',
+      title: t('config.forgetTitle'),
+      body: t('config.forgetBody'),
+      confirmLabel: t('common.clear'),
       action: state.forgetSavedSensors,
-      doneMessage: 'Saved sensors cleared',
+      doneMessage: t('config.forgetDone'),
     );
   }
 
@@ -456,7 +733,7 @@ class SettingsScreen extends StatelessWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
+              child: Text(t('common.cancel')),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(dialogContext, true),

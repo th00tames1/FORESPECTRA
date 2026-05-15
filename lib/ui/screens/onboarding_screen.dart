@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/app_state.dart';
+import '../../services/i18n.dart';
 import '../theme/app_theme.dart';
 import 'home_shell.dart';
 
@@ -16,32 +17,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _controller = PageController();
   int _page = 0;
 
-  static const _pages = [
-    _OnboardingStep(
-      icon: Icons.wifi_tethering,
-      title: 'Turn on hotspot first',
-      body: 'Forespectra connects to the Si-NIR sensor over Wi-Fi. Turn on '
-          'your phone hotspot and power on the sensor — it joins automatically.',
-    ),
-    _OnboardingStep(
-      icon: Icons.power_settings_new,
-      title: 'Tap INITIALIZE to connect',
-      body: 'On the first screen, tap the big INITIALIZE circle. The app '
-          'will discover and verify your sensor.',
-    ),
-    _OnboardingStep(
-      icon: Icons.layers,
-      title: 'Set a reference, then scan',
-      body: 'Capture a white/reference reading first, then tap SCAN. The '
-          'reference is auto-restored on next launch (until it expires).',
-    ),
-    _OnboardingStep(
-      icon: Icons.auto_graph,
-      title: 'Save, batch, or share',
-      body: 'Name your sample and save. Use Batch mode for sequential '
-          'measurements. Export from History to CSV with one tap.',
-    ),
-  ];
+  static const _pageCount = 4;
+
+  List<_OnboardingStep> get _pages => [
+        _OnboardingStep(
+          icon: Icons.wifi_tethering,
+          title: t('onboarding.title1'),
+          body: t('onboarding.body1'),
+        ),
+        _OnboardingStep(
+          icon: Icons.power_settings_new,
+          title: t('onboarding.title2'),
+          body: t('onboarding.body2'),
+        ),
+        _OnboardingStep(
+          icon: Icons.layers,
+          title: t('onboarding.title3'),
+          body: t('onboarding.body3'),
+        ),
+        _OnboardingStep(
+          icon: Icons.auto_graph,
+          title: t('onboarding.title4'),
+          body: t('onboarding.body4'),
+        ),
+      ];
 
   @override
   void dispose() {
@@ -50,7 +49,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _next() {
-    if (_page < _pages.length - 1) {
+    if (_page < _pageCount - 1) {
       _controller.nextPage(
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeOut,
@@ -78,18 +77,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               alignment: Alignment.topRight,
               child: TextButton(
                 onPressed: _finish,
-                child: const Text('Skip'),
+                child: Text(t('onboarding.skip')),
               ),
             ),
             Expanded(
               child: PageView.builder(
                 controller: _controller,
-                itemCount: _pages.length,
+                itemCount: _pageCount,
                 onPageChanged: (i) => setState(() => _page = i),
                 itemBuilder: (_, i) => _pages[i],
               ),
             ),
-            _PageDots(count: _pages.length, current: _page),
+            _PageDots(count: _pageCount, current: _page),
             const SizedBox(height: 24),
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
@@ -98,7 +97,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 child: ElevatedButton(
                   onPressed: _next,
                   child: Text(
-                    _page == _pages.length - 1 ? "Let's go" : 'Next',
+                    _page == _pageCount - 1
+                        ? t('onboarding.start')
+                        : t('common.next'),
                   ),
                 ),
               ),

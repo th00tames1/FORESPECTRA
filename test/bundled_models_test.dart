@@ -49,4 +49,22 @@ void main() {
       }
     });
   }
+
+  // The four new models carry a GH/NH outlier-diagnostics block.
+  const ghNhModels = [
+    'assets/models/leaves_species_model.json',
+    'assets/models/leaves_moisture_model.json',
+    'assets/models/soil_water_content_model.json',
+    'assets/models/soil_organic_matter_model.json',
+  ];
+  for (final path in ghNhModels) {
+    test('$path has a valid GH/NH config', () {
+      final model = CalibrationModel.fromJson(File(path).readAsStringSync());
+      final cfg = model.fossGhNhConfig;
+      expect(cfg, isNotNull, reason: '$path: missing gh_nh block');
+      expect(cfg!.isValid, isTrue, reason: '$path: gh_nh block invalid');
+      expect(cfg.pca.featureLength, model.expectedLength,
+          reason: '$path: PCA feature length must match model feature count');
+    });
+  }
 }

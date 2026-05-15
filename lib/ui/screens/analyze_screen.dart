@@ -77,8 +77,8 @@ class _AnalyzeScreenState extends State<AnalyzeScreen> {
                   SpectrumChart(
                     spectrum: state.latestSpectrum,
                     title: hasMultiple
-                        ? 'Averaged spectrum (${acquired.length} scans, ${state.averagingMethod.label})'
-                        : 'Spectrum Preview',
+                        ? '${t('results.averagedSpectrum')} (${acquired.length} ${t('results.scans')}, ${state.averagingMethod.label})'
+                        : t('results.spectrumPreview'),
                     axisUnit: state.spectrumAxisUnit,
                     overlays: hasMultiple ? acquired : const [],
                   ),
@@ -87,7 +87,7 @@ class _AnalyzeScreenState extends State<AnalyzeScreen> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: Text(
-                        'Faded lines: individual scans. Bold line: averaged.',
+                        t('results.fadedLinesHint'),
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),
@@ -168,9 +168,9 @@ class _AnalyzeScreenState extends State<AnalyzeScreen> {
                                     messenger
                                       ..hideCurrentSnackBar()
                                       ..showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Saved'),
-                                          duration: Duration(
+                                        SnackBar(
+                                          content: Text(t('common.saved')),
+                                          duration: const Duration(
                                             milliseconds: 1500,
                                           ),
                                         ),
@@ -275,14 +275,13 @@ class _AnalyzeScreenState extends State<AnalyzeScreen> {
         ? (isDark ? const Color(0xFF3A1A18) : const Color(0xFFFBE4E4))
         : (isDark ? const Color(0xFF3A2E14) : const Color(0xFFFAF3D9));
     final title = isOutlier
-        ? 'Outlier detected'
-        : 'Possible drift';
+        ? t('results.outlierTitle')
+        : t('results.driftTitle');
     final body = isOutlier
-        ? 'This measurement is unusual versus the calibration set '
-              '(${flagged.join(", ")}). Consider re-scanning or '
-              'verifying the sample.'
-        : 'This measurement is borderline (${flagged.join(", ")}). '
-              'Result may be less reliable.';
+        ? '${t('results.outlierBodyPre')} (${flagged.join(", ")}). '
+              '${t('results.outlierBodyPost')}'
+        : '${t('results.driftBodyPre')} (${flagged.join(", ")}). '
+              '${t('results.driftBodyPost')}';
 
     return Container(
       decoration: BoxDecoration(
@@ -332,27 +331,27 @@ class _AnalyzeScreenState extends State<AnalyzeScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Confirm Save'),
+          title: Text(t('results.confirmSave')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextFormField(
                 initialValue: material,
                 onChanged: (value) => material = value,
-                decoration: const InputDecoration(labelText: 'Material name'),
+                decoration: InputDecoration(labelText: t('scan.material')),
               ),
               const SizedBox(height: 10),
               TextFormField(
                 initialValue: sample,
                 onChanged: (value) => sample = value,
-                decoration: const InputDecoration(labelText: 'Sample name'),
+                decoration: InputDecoration(labelText: t('scan.sample')),
               ),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
+              child: Text(t('common.cancel')),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(
@@ -362,7 +361,7 @@ class _AnalyzeScreenState extends State<AnalyzeScreen> {
                   sample: sample.trim(),
                 ),
               ),
-              child: const Text('Save'),
+              child: Text(t('common.save')),
             ),
           ],
         );
@@ -396,11 +395,12 @@ class _AnalysisSummaryCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Analysis', style: Theme.of(context).textTheme.titleMedium),
+            Text(t('results.analysis'),
+                style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             if (results.isEmpty)
               Text(
-                'No model applied. Select models from the Model button on Scan tab.',
+                t('results.noModel'),
                 style: Theme.of(context).textTheme.bodySmall,
               )
             else

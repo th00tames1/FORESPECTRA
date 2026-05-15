@@ -31,7 +31,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
                 : t('connect.initialize');
         final subtitle = isConnected
             ? state.isVerifyingConnection
-                ? 'Connected. Verifying sensor...'
+                ? t('connect.verifying')
                 : t('connect.readyToScan')
             : isConnecting
                 ? t('connect.lookingForDevice')
@@ -172,7 +172,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
                                               Text(
                                                 state.moduleId == null
                                                     ? state.currentIp
-                                                    : '${state.currentIp} | Module ${state.moduleId}',
+                                                    : '${state.currentIp} | ${t('connect.module')} ${state.moduleId}',
                                                 style: Theme.of(context)
                                                     .textTheme
                                                     .bodySmall
@@ -317,14 +317,14 @@ class _SensorPickerSheetState extends State<_SensorPickerSheet> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Select Device',
+                  t('connect.selectDevice'),
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 8),
                 Text(
                   isBusy
-                      ? 'Searching hotspot network...'
-                      : 'Choose a saved or discovered sensor IP.',
+                      ? t('connect.searchingHotspot')
+                      : t('connect.choosePrompt'),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppTheme.muted,
                       ),
@@ -332,8 +332,8 @@ class _SensorPickerSheetState extends State<_SensorPickerSheet> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _manualController,
-                  decoration: const InputDecoration(
-                    labelText: 'Add device address',
+                  decoration: InputDecoration(
+                    labelText: t('connect.addDeviceAddress'),
                     hintText: '10.13.199.8',
                   ),
                 ),
@@ -352,7 +352,7 @@ class _SensorPickerSheetState extends State<_SensorPickerSheet> {
                       );
                     },
                     icon: const Icon(Icons.add_link),
-                    label: const Text('Add address'),
+                    label: Text(t('connect.addAddress')),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -376,8 +376,8 @@ class _SensorPickerSheetState extends State<_SensorPickerSheet> {
                             ),
                             child: Text(
                               isBusy
-                                  ? 'Searching...'
-                                  : 'No devices found yet.',
+                                  ? t('connect.searchingShort')
+                                  : t('connect.noDevices'),
                               style: Theme.of(context)
                                   .textTheme
                                   .bodySmall
@@ -399,10 +399,10 @@ class _SensorPickerSheetState extends State<_SensorPickerSheet> {
                               itemBuilder: (context, index) {
                                 final sensor = sensors[index];
                                 final subtitleText = sensor.moduleId != null
-                                    ? 'Module ${sensor.moduleId}'
+                                    ? '${t('connect.module')} ${sensor.moduleId}'
                                     : sensor.fromHistory
-                                        ? 'Saved address'
-                                        : 'Reachable host';
+                                        ? t('connect.savedAddress')
+                                        : t('connect.reachableHost');
                                 return ListTile(
                                   dense: true,
                                   leading: Icon(
@@ -444,7 +444,9 @@ class _SensorPickerSheetState extends State<_SensorPickerSheet> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.refresh),
-                    label: Text(state.isDiscovering ? 'Searching...' : 'Search again'),
+                    label: Text(state.isDiscovering
+                        ? t('connect.searchingShort')
+                        : t('connect.searchAgain')),
                   ),
                 ),
               ],

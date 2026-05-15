@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../data/storage/data_store.dart';
 import '../../domain/measurement.dart';
 import '../../services/app_state.dart';
+import '../../services/i18n.dart';
 import '../theme/app_theme.dart';
 
 class CompareScreen extends StatefulWidget {
@@ -57,7 +58,7 @@ class _CompareScreenState extends State<CompareScreen> {
     final axisUnit = context.read<AppState>().spectrumAxisUnit;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(title: const Text('Compare scans')),
+      appBar: AppBar(title: Text(t('compare.title'))),
       body: SafeArea(
         child: FutureBuilder<List<_TraceData>>(
           future: _loadFuture,
@@ -67,12 +68,10 @@ class _CompareScreenState extends State<CompareScreen> {
             }
             final traces = snapshot.data!;
             if (traces.length < 2) {
-              return const Center(
+              return Center(
                 child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Text(
-                    'Could not load spectra for both scans.',
-                  ),
+                  padding: const EdgeInsets.all(24),
+                  child: Text(t('compare.loadError')),
                 ),
               );
             }

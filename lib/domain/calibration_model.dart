@@ -744,6 +744,17 @@ class CalibrationModel {
     this.trees = const [],
     this.initialValue = 0.0,
     this.treeWeight = 1.0,
+    this.algorithm = '',
+    this.description = '',
+    this.createdAt = '',
+    this.modelVersion = '',
+    this.nSamples,
+    this.metricPrimaryLabel,
+    this.metricPrimaryValue,
+    this.metricPrimaryNote,
+    this.metricSecondaryLabel,
+    this.metricSecondaryValue,
+    this.metricSecondaryNote,
   });
 
   final String id;
@@ -774,6 +785,18 @@ class CalibrationModel {
   final List<DecisionTreeNodes> trees;
   final double initialValue;
   final double treeWeight;
+  // Human-readable model card fields (used by the Config "Models" list).
+  final String algorithm;          // e.g. "Random Forest", "PLS-R"
+  final String description;        // one-line note
+  final String createdAt;          // ISO date (may be empty)
+  final String modelVersion;       // e.g. "1.0 (2026-05-15)"
+  final int? nSamples;             // training set size, if known
+  final String? metricPrimaryLabel;
+  final String? metricPrimaryValue;
+  final String? metricPrimaryNote;
+  final String? metricSecondaryLabel;
+  final String? metricSecondaryValue;
+  final String? metricSecondaryNote;
 
   bool get isClassification =>
       modelType == 'pls_da_binary' || modelType == 'pls_da_multi';
@@ -979,6 +1002,20 @@ class CalibrationModel {
         .map((e) => e.toString())
         .toList(growable: false);
 
+    final algorithm = (jsonMap['algorithm'] as String? ?? '').trim();
+    final description = (jsonMap['description'] as String? ?? '').trim();
+    final createdAt = (jsonMap['created_at'] as String? ?? '').trim();
+    final modelVersion = (jsonMap['model_version'] as String? ?? '').trim();
+    final nSamples = (jsonMap['n_samples'] as num?)?.toInt();
+    final mDisplay = Map<String, dynamic>.from(
+      (jsonMap['metrics_display'] as Map?) ?? const <String, dynamic>{},
+    );
+    String? metricLabel(String key, String field) {
+      final m = mDisplay[key];
+      if (m is Map && m[field] is String) return (m[field] as String).trim();
+      return null;
+    }
+
     final expectedLength = coeffs.isNotEmpty
         ? coeffs.length
         : (scalerMean.isNotEmpty ? scalerMean.length : xAxis.length);
@@ -1011,6 +1048,17 @@ class CalibrationModel {
       trees: trees,
       initialValue: initialValue,
       treeWeight: treeWeight,
+      algorithm: algorithm,
+      description: description,
+      createdAt: createdAt,
+      modelVersion: modelVersion,
+      nSamples: nSamples,
+      metricPrimaryLabel: metricLabel('primary', 'label'),
+      metricPrimaryValue: metricLabel('primary', 'value'),
+      metricPrimaryNote: metricLabel('primary', 'note'),
+      metricSecondaryLabel: metricLabel('secondary', 'label'),
+      metricSecondaryValue: metricLabel('secondary', 'value'),
+      metricSecondaryNote: metricLabel('secondary', 'note'),
     );
   }
 

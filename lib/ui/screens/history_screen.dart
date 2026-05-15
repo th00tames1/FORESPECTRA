@@ -54,7 +54,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ? null
                     : () => _showCsvExportSheet(filtered),
                 icon: const Icon(Icons.file_download_outlined),
-                label: const Text('CSV'),
+                label: Text(t('history.csv')),
               ),
               body: SafeArea(
                 bottom: true,
@@ -80,29 +80,29 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       Row(
                         children: [
                           Text(
-                            'Sort',
+                            t('history.sort'),
                             style: Theme.of(context).textTheme.labelLarge,
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: DropdownButtonFormField<_HistorySort>(
                               initialValue: _sort,
-                              items: const [
+                              items: [
                                 DropdownMenuItem(
                                   value: _HistorySort.dateDesc,
-                                  child: Text('Date (newest)'),
+                                  child: Text(t('history.sortDateNewest')),
                                 ),
                                 DropdownMenuItem(
                                   value: _HistorySort.dateAsc,
-                                  child: Text('Date (oldest)'),
+                                  child: Text(t('history.sortDateOldest')),
                                 ),
                                 DropdownMenuItem(
                                   value: _HistorySort.nameAsc,
-                                  child: Text('Name (A-Z)'),
+                                  child: Text(t('history.sortNameAz')),
                                 ),
                                 DropdownMenuItem(
                                   value: _HistorySort.nameDesc,
-                                  child: Text('Name (Z-A)'),
+                                  child: Text(t('history.sortNameZa')),
                                 ),
                               ],
                               onChanged: (value) {
@@ -139,11 +139,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                             title: Text(
                                               item.sampleName == null ||
                                                       item.sampleName!.isEmpty
-                                                  ? 'Scan ${item.id.substring(0, 8)}'
+                                                  ? '${t('history.scan')} ${item.id.substring(0, 8)}'
                                                   : item.sampleName!,
                                             ),
                                             subtitle: Text(
-                                              '${item.materialName ?? 'Unknown material'} • ${item.timestamp}',
+                                              '${item.materialName ?? t('history.unknownMaterial')} • ${item.timestamp}',
                                             ),
                                             onLongPress: () =>
                                                 _showItemActions(item),
@@ -170,29 +170,29 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                                     CrossAxisAlignment.start,
                                                 children: [
                                                   const Divider(height: 12),
-                                                  Text('Scan ${item.id}'),
+                                                  Text('${t('history.scan')} ${item.id}'),
                                                   const SizedBox(height: 6),
                                                   Text(
-                                                    'Device: ${item.deviceId}',
+                                                    '${t('history.device')}: ${item.deviceId}',
                                                   ),
                                                   if (item.materialName != null)
                                                     Text(
-                                                      'Material: ${item.materialName}',
+                                                      '${t('history.material')}: ${item.materialName}',
                                                     ),
                                                   if (item.sampleName != null)
                                                     Text(
-                                                      'Sample: ${item.sampleName}',
+                                                      '${t('history.sample')}: ${item.sampleName}',
                                                     ),
                                                   Text(
-                                                    'Timestamp: ${item.timestamp}',
+                                                    '${t('history.timestamp')}: ${item.timestamp}',
                                                   ),
                                                   Text(
-                                                    'Scan time: ${item.scanTimeMs} ms',
+                                                    '${t('history.scanTime')}: ${item.scanTimeMs} ms',
                                                   ),
                                                   if (analyses.isNotEmpty) ...[
                                                     const SizedBox(height: 8),
                                                     Text(
-                                                      'Analysis',
+                                                      t('history.analysis'),
                                                       style: Theme.of(
                                                         context,
                                                       ).textTheme.labelLarge,
@@ -246,17 +246,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
             children: [
               ListTile(
                 leading: const Icon(Icons.edit),
-                title: const Text('Rename'),
+                title: Text(t('history.rename')),
                 onTap: () => Navigator.pop(sheetContext, 'rename'),
               ),
               ListTile(
                 leading: const Icon(Icons.compare_arrows),
-                title: const Text('Compare with…'),
+                title: Text(t('history.compareWith')),
                 onTap: () => Navigator.pop(sheetContext, 'compare'),
               ),
               ListTile(
                 leading: const Icon(Icons.delete_outline),
-                title: const Text('Delete'),
+                title: Text(t('history.delete')),
                 onTap: () => Navigator.pop(sheetContext, 'delete'),
               ),
             ],
@@ -329,14 +329,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Export CSV',
+                    t('history.exportCsv'),
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
                   CheckboxListTile(
                     value: allSelected,
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Select all'),
+                    title: Text(t('history.selectAll')),
                     onChanged: (value) {
                       setModalState(() {
                         selected.clear();
@@ -359,7 +359,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         final checked = selected.contains(item.id);
                         final label =
                             item.sampleName == null || item.sampleName!.isEmpty
-                            ? 'Scan ${item.id.substring(0, 8)}'
+                            ? '${t('history.scan')} ${item.id.substring(0, 8)}'
                             : item.sampleName!;
                         return CheckboxListTile(
                           value: checked,
@@ -400,18 +400,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 ..showSnackBar(
                                   SnackBar(
                                     content: Text(
-                                      'CSV saved to ${p.basename(path)}',
+                                      '${t('history.csvSaved')} ${p.basename(path)}',
                                     ),
                                     duration: const Duration(seconds: 5),
                                     action: SnackBarAction(
-                                      label: 'Share',
+                                      label: t('common.share'),
                                       onPressed: () => _shareCsv(path),
                                     ),
                                   ),
                                 );
                             },
                       icon: const Icon(Icons.ios_share),
-                      label: const Text('Export & share'),
+                      label: Text(t('history.exportShare')),
                     ),
                   ),
                 ],
@@ -804,7 +804,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     if (!mounted) return;
     if (candidates.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No other scans to compare with.')),
+        SnackBar(content: Text(t('history.noCompare'))),
       );
       return;
     }
@@ -822,7 +822,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Pick a scan to compare against',
+                  t('history.pickCompare'),
                   style: Theme.of(sheetContext).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 8),
@@ -869,20 +869,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Rename'),
+          title: Text(t('history.rename')),
           content: TextField(
             controller: controller,
-            decoration: const InputDecoration(labelText: 'Name'),
+            decoration: InputDecoration(labelText: t('common.name')),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
+              child: Text(t('common.cancel')),
             ),
             ElevatedButton(
               onPressed: () =>
                   Navigator.pop(dialogContext, controller.text.trim()),
-              child: const Text('Save'),
+              child: Text(t('common.save')),
             ),
           ],
         );
@@ -905,16 +905,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Delete'),
-          content: const Text('Delete this scan record?'),
+          title: Text(t('history.delete')),
+          content: Text(t('history.deleteConfirm')),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
+              child: Text(t('common.cancel')),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Delete'),
+              child: Text(t('common.delete')),
             ),
           ],
         );
@@ -1319,12 +1319,12 @@ class _EmptyState extends StatelessWidget {
               Icon(Icons.auto_graph, size: 40, color: AppTheme.muted),
               const SizedBox(height: 12),
               Text(
-                'No scans yet',
+                t('history.noScans'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 6),
               Text(
-                'Capture your first scan from the Scan tab.',
+                t('history.noScansBody'),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],

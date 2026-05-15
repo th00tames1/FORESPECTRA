@@ -1,7 +1,7 @@
 {
   "id": "moisture_plsr_sg1_snv",
-  "name": "Moisture (%)",
-  "label": "Moisture",
+  "name": "Leaf moisture \u2014 Laurel / Rhododendron",
+  "label": "Leaf moisture",
   "units": "%",
   "axis_unit": "nm",
   "model_type": "pls_regression",
@@ -6623,5 +6623,20 @@
       "normal_max": 19.149412,
       "warning_max": 19.958458
     }
-  }
+  },
+  "algorithm": "PLS-R",
+  "description": "Legacy moisture regression trained on Cherry Laurel + Pacific Rhododendron leaves only. Use with the matching legacy species model.",
+  "metrics_display": {
+    "primary": {
+      "label": "R\u00b2",
+      "value": "0.824"
+    },
+    "secondary": {
+      "label": "RMSE",
+      "value": "\u2014",
+      "note": "Reported in original deck; not stored"
+    }
+  },
+  "n_samples": 30,
+  "model_version": "1.0 (2026-05-15)"
 }

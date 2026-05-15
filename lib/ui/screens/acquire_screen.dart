@@ -79,12 +79,6 @@ class _AcquireScreenState extends State<AcquireScreen> {
 
         return Scaffold(
           backgroundColor: Colors.transparent,
-          floatingActionButton: FloatingActionButton.extended(
-            heroTag: 'scan_model_fab',
-            onPressed: () => _showModelPickerSheet(context, state),
-            icon: const Icon(Icons.psychology_alt_outlined),
-            label: const Text('Model'),
-          ),
           body: SafeArea(
             bottom: true,
             child: LayoutBuilder(
@@ -166,6 +160,15 @@ class _AcquireScreenState extends State<AcquireScreen> {
                         : t('scan.referenceSet'))
                   : t('scan.setReference'),
             ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => _showModelQuickSheet(context, state),
+            icon: const Icon(Icons.psychology_alt_outlined),
+            label: Text(_modelButtonLabel(state)),
           ),
         ),
       ],
@@ -393,6 +396,101 @@ class _AcquireScreenState extends State<AcquireScreen> {
     await _openResultsScreen(context);
   }
 
+  String _modelButtonLabel(AppState state) {
+    final n = state.selectedModels.length;
+    if (n == 0) {
+      return '${t('scan.analysisModels')} — ${t('scan.modelNoneSelected')}';
+    }
+    if (n == 1) {
+      return '${t('scan.analysisModel')} — ${state.selectedModels.first.name}';
+    }
+    return '${t('scan.analysisModels')} — $n ${t('scan.modelSelectedSuffix')}';
+  }
+
+  /// Lightweight per-scan model toggle. Full details (algorithm, metrics,
+  /// dataset) live in Config > Models; this sheet is just quick checkboxes.
+  Future<void> _showModelQuickSheet(
+    BuildContext context,
+    AppState state,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Theme.of(context).cardTheme.color,
+      builder: (sheetContext) {
+        return Consumer<AppState>(
+          builder: (context, liveState, _) {
+            final models = liveState.availableModels;
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                4,
+                20,
+                20 + MediaQuery.of(context).viewPadding.bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    t('scan.analysisModels'),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    t('scan.modelSheetSubtitle'),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (models.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        t('scan.modelsNone'),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    )
+                  else
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.of(context).size.height * 0.5,
+                      ),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: models.length,
+                        itemBuilder: (context, index) {
+                          final model = models[index];
+                          final checked =
+                              liveState.isModelSelected(model.id);
+                          final algo = model.algorithm.isEmpty
+                              ? (model.isClassification
+                                    ? t('scan.classification')
+                                    : t('scan.regression'))
+                              : model.algorithm;
+                          return CheckboxListTile(
+                            value: checked,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(model.name),
+                            subtitle: Text(algo),
+                            onChanged: (value) => liveState
+                                .toggleModelSelection(model.id, value == true),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _toggleBatchMode(
     BuildContext context,
     AppState state,
@@ -410,21 +508,21 @@ class _AcquireScreenState extends State<AcquireScreen> {
             : state.sampleName.trim();
         var startStr = '1';
         return AlertDialog(
-          title: const Text('Start batch mode'),
+          title: Text(t('scan.batchSetupTitle')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Material stays fixed; sample auto-increments after each save.',
+                t('scan.batchSetupBody'),
                 style: Theme.of(dialogContext).textTheme.bodySmall,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 initialValue: prefix,
                 onChanged: (v) => prefix = v,
-                decoration: const InputDecoration(
-                  labelText: 'Sample prefix',
-                  hintText: 'e.g. Pine',
+                decoration: InputDecoration(
+                  labelText: t('scan.samplePrefix'),
+                  hintText: t('scan.materialHint'),
                 ),
               ),
               const SizedBox(height: 8),
@@ -432,8 +530,8 @@ class _AcquireScreenState extends State<AcquireScreen> {
                 initialValue: startStr,
                 keyboardType: TextInputType.number,
                 onChanged: (v) => startStr = v,
-                decoration: const InputDecoration(
-                  labelText: 'Start number',
+                decoration: InputDecoration(
+                  labelText: t('scan.startNumber'),
                   hintText: '1',
                 ),
               ),
@@ -442,7 +540,7 @@ class _AcquireScreenState extends State<AcquireScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
+              child: Text(t('common.cancel')),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(
@@ -452,7 +550,7 @@ class _AcquireScreenState extends State<AcquireScreen> {
                   start: int.tryParse(startStr) ?? 1,
                 ),
               ),
-              child: const Text('Start'),
+              child: Text(t('common.start')),
             ),
           ],
         );
@@ -495,12 +593,12 @@ class _AcquireScreenState extends State<AcquireScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Reference is required before scanning.',
+                t('scan.referenceRequiredTitle'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
               Text(
-                'Tap Set reference to proceed.',
+                t('scan.referenceRequiredBody'),
                 style: Theme.of(
                   context,
                 ).textTheme.bodySmall?.copyWith(color: AppTheme.muted),
@@ -514,7 +612,7 @@ class _AcquireScreenState extends State<AcquireScreen> {
                     await state.runBackground();
                   },
                   icon: const Icon(Icons.layers),
-                  label: const Text('Set reference'),
+                  label: Text(t('scan.setReference')),
                 ),
               ),
             ],
@@ -524,114 +622,6 @@ class _AcquireScreenState extends State<AcquireScreen> {
     );
   }
 
-  Future<void> _showModelPickerSheet(
-    BuildContext context,
-    AppState state,
-  ) async {
-    final selected = Set<String>.from(state.selectedModelIds);
-
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Theme.of(context).cardTheme.color,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final models = state.availableModels;
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                20,
-                12,
-                20,
-                20 + MediaQuery.of(context).viewPadding.bottom,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Apply Models',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Select models to run after each scan.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 8),
-                  if (models.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4, bottom: 12),
-                      child: Text(
-                        'No bundled models available.',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    )
-                  else
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxHeight: MediaQuery.of(context).size.height * 0.45,
-                      ),
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: models.length,
-                        itemBuilder: (context, index) {
-                          final model = models[index];
-                          final checked = selected.contains(model.id);
-                          return CheckboxListTile(
-                            value: checked,
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(model.name),
-                            subtitle: Text(
-                              '${model.label} • ${model.isClassification ? 'Classification' : 'Regression'}',
-                            ),
-                            onChanged: (value) {
-                              setModalState(() {
-                                if (value == true) {
-                                  selected.add(model.id);
-                                } else {
-                                  selected.remove(model.id);
-                                }
-                              });
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () {
-                            setModalState(selected.clear);
-                          },
-                          child: const Text('Clear all'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            state.setSelectedModelIds(selected);
-                            Navigator.pop(sheetContext);
-                          },
-                          icon: const Icon(Icons.check),
-                          label: const Text('Apply'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
 }
 
 class _BatchSetup {
