@@ -89,6 +89,8 @@ extension AppStateConnection on AppState {
           await client.disconnect();
           await client.connect(ip, timeout: const Duration(seconds: 4));
           isConnected = true;
+          testMode = false;
+          scanTabTapCount = 0;
           currentIp = ip;
           _syncReferenceFromCurrentIp();
           backgroundSpectrum = null;
@@ -221,6 +223,27 @@ extension AppStateConnection on AppState {
     _cancelDiscovery(notify: false);
     setCurrentIp(sensor.ip, notify: false);
     await connect(preferredIp: sensor.ip, fallbackToKnown: false);
+  }
+
+  /// True when there is at least one sensor in the list worth trying to
+  /// connect to (discovered now or remembered from a previous session).
+  bool get hasConnectableDevice => discoveredSensors.isNotEmpty;
+
+  /// Connect to the best currently-reachable sensor without making the user
+  /// pick a specific row: prefer a verified discovered sensor, then any other
+  /// listed sensor, then fall back through the known/recent IPs.
+  Future<void> connectToBestAvailable() async {
+    _cancelDiscovery(notify: false);
+    String? preferred;
+    for (final sensor in discoveredSensors) {
+      if (sensor.verified) {
+        preferred = sensor.ip;
+        break;
+      }
+    }
+    preferred ??=
+        discoveredSensors.isNotEmpty ? discoveredSensors.first.ip : null;
+    await connect(preferredIp: preferred, fallbackToKnown: true);
   }
 
   Future<void> discoverSensors() async {
@@ -376,7 +399,19 @@ extension AppStateConnection on AppState {
     if (!fallbackToKnown) {
       return _orderedUnique([preferred]);
     }
-    return _orderedUnique([preferred, ..._recentIps, ..._defaultKnownIps]);
+    // Fold currently-discovered sensors into the fallback chain (verified
+    // ones first) so a freshly-found device at an unknown IP is auto-tried.
+    final discovered = <String>[
+      for (final sensor in discoveredSensors)
+        if (sensor.verified) sensor.ip,
+      for (final sensor in discoveredSensors) sensor.ip,
+    ];
+    return _orderedUnique([
+      preferred,
+      ...discovered,
+      ..._recentIps,
+      ..._defaultKnownIps,
+    ]);
   }
 
   Future<List<String>> _discoveryTargets() async {

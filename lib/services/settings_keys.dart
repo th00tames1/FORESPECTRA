@@ -8,6 +8,12 @@ class SettingsKeys {
   static const showGhNhDiagnostics = 'showGhNhDiagnostics';
   static const sendLengthPrefix = 'sendLengthPrefix';
 
+  // GH/NH diagnostic threshold overrides. Empty string = use model default.
+  static const ghWarningThreshold = 'ghWarningThreshold';
+  static const ghOutlierThreshold = 'ghOutlierThreshold';
+  static const nhWarningThreshold = 'nhWarningThreshold';
+  static const nhOutlierThreshold = 'nhOutlierThreshold';
+
   static const scanTimeMs = 'scanTimeMs';
   static const zeroPadding = 'zeroPadding';
   static const commonWavNum = 'commonWavNum';
@@ -17,6 +23,8 @@ class SettingsKeys {
   static const targetScanCount = 'targetScanCount';
   static const averagingMethod = 'averagingMethod';
   static const referenceMaxAgeMin = 'referenceMaxAgeMin';
+  static const continuousMode = 'continuousMode';
+  static const scanIntervalMs = 'scanIntervalMs';
 
   static const lampsCount = 'lampsCount';
   static const lampSelect = 'lampSelect';

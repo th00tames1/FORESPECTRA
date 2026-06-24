@@ -5,8 +5,51 @@ part of 'app_state.dart';
 // bookkeeping, batch mode, and session persistence.
 
 extension AppStateScanning on AppState {
+  /// Tap-counter for the hidden developer test mode. Ten taps on the Scan tab
+  /// while disconnected enable a simulated-sensor mode.
+  void registerScanTabTap() {
+    if (isConnected || testMode) return;
+    scanTabTapCount += 1;
+    if (scanTabTapCount >= 10) {
+      scanTabTapCount = 0;
+      testMode = true;
+      hasBackground = false;
+      latestSpectrum = null;
+      acquiredSpectra = const [];
+      latestAnalysisResults = const [];
+      statusMessage = 'Test mode: simulated sensor (no hardware).';
+      setTab(1);
+      notifyUi();
+    }
+  }
+
+  void exitTestMode() {
+    if (!testMode) return;
+    testMode = false;
+    scanTabTapCount = 0;
+    hasBackground = false;
+    latestSpectrum = null;
+    acquiredSpectra = const [];
+    latestAnalysisResults = const [];
+    statusMessage = 'Disconnected';
+    setTab(0);
+    notifyUi();
+  }
+
   Future<void> runBackground() async {
-    if (!isConnected || isBackgrounding || isScanning) return;
+    if ((!isConnected && !testMode) || isBackgrounding || isScanning) return;
+    if (!isConnected && testMode) {
+      // Simulated reference capture.
+      isBackgrounding = true;
+      statusMessage = 'Capturing reference (test mode)...';
+      notifyUi();
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      hasBackground = true;
+      isBackgrounding = false;
+      statusMessage = 'Reference captured (test mode)';
+      notifyUi();
+      return;
+    }
     if (isVerifyingConnection) {
       statusMessage = 'Please wait for connection verification to finish.';
       notifyUi();
@@ -50,8 +93,9 @@ extension AppStateScanning on AppState {
   }
 
   Future<void> runSpectrum() async {
-    if (!isConnected || isScanning || isBackgrounding) return;
-    _syncReferenceFromCurrentIp();
+    if (isScanning || isBackgrounding) return;
+    if (!isConnected && !testMode) return;
+    if (isConnected) _syncReferenceFromCurrentIp();
     if (!hasBackground) {
       statusMessage = 'Background required. Tap Set reference.';
       notifyUi();
@@ -59,6 +103,7 @@ extension AppStateScanning on AppState {
     }
     final scanTotal = targetScanCount < 1 ? 1 : targetScanCount;
     isScanning = true;
+    stopScanRequested = false;
     currentScanIndex = 0;
     acquiredSpectra = const [];
     final collected = <Spectrum>[];
@@ -68,26 +113,48 @@ extension AppStateScanning on AppState {
     notifyUi();
     try {
       for (var i = 0; i < scanTotal; i++) {
+        if (stopScanRequested) break;
         currentScanIndex = i + 1;
         if (scanTotal > 1) {
           statusMessage = 'Scanning $currentScanIndex/$scanTotal...';
           notifyUi();
         }
-        final spectrum = await client.runSpectrum(
-          scanParams,
-          timeout: const Duration(seconds: 20),
-        );
+        final spectrum = await _acquireSpectrum();
         collected.add(spectrum);
         acquiredSpectra = List.unmodifiable(collected);
+        // Continuous-sweep mode: pause between scans so the operator can move
+        // the probe to a fresh spot. Skipped after the final scan / on stop.
+        if (continuousMode &&
+            !stopScanRequested &&
+            i < scanTotal - 1 &&
+            scanIntervalMs > 0) {
+          statusMessage = 'Move to next spot ($currentScanIndex/$scanTotal)...';
+          notifyUi();
+          // Wait in short slices so a stop tap is honored within ~50ms rather
+          // than after the full interval.
+          var waited = 0;
+          const sliceMs = 50;
+          while (waited < scanIntervalMs && !stopScanRequested) {
+            final remaining = scanIntervalMs - waited;
+            final slice = remaining < sliceMs ? remaining : sliceMs;
+            await Future<void>.delayed(Duration(milliseconds: slice));
+            waited += slice;
+          }
+        }
       }
-      latestSpectrum = collected.length == 1
-          ? collected.first
-          : averageSpectra(collected, method: averagingMethod);
-      _runSelectedModelAnalysis(notify: false);
-      statusMessage = scanTotal == 1
-          ? 'Ready to Scan'
-          : 'Captured $scanTotal scans (${averagingMethod.label})';
-      captureCount += 1;
+      if (collected.isEmpty) {
+        statusMessage = 'Scan cancelled';
+      } else {
+        final n = collected.length;
+        latestSpectrum = n == 1
+            ? collected.first
+            : averageSpectra(collected, method: averagingMethod);
+        _runSelectedModelAnalysis(notify: false);
+        statusMessage = n == 1
+            ? 'Ready to Scan'
+            : 'Captured $n scans (${averagingMethod.label})';
+        captureCount += 1;
+      }
     } catch (error) {
       acquiredSpectra = const [];
       final lost = await _handleConnectionLossIfNeeded(
@@ -104,9 +171,57 @@ extension AppStateScanning on AppState {
       }
     } finally {
       isScanning = false;
+      stopScanRequested = false;
       currentScanIndex = 0;
     }
     notifyUi();
+  }
+
+  /// Request that an in-progress continuous capture finish early. Whatever
+  /// scans have been collected so far are averaged and saved as usual.
+  void requestStopScan() {
+    if (!isScanning || stopScanRequested) return;
+    stopScanRequested = true;
+    statusMessage = 'Finishing capture...';
+    notifyUi();
+  }
+
+  /// Acquire one spectrum: from the real sensor when connected, otherwise a
+  /// synthetic one (test mode).
+  Future<Spectrum> _acquireSpectrum() async {
+    if (isConnected) {
+      return client.runSpectrum(
+        scanParams,
+        timeout: const Duration(seconds: 20),
+      );
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    return _syntheticSpectrum();
+  }
+
+  /// A plausible synthetic NIR reflectance spectrum (test mode only). Includes
+  /// a baseline, a couple of absorption-like dips, and a little run-to-run
+  /// noise so averaging and the GH/NH diagnostics have something to chew on.
+  Spectrum _syntheticSpectrum() {
+    const n = 256;
+    final rnd = Random();
+    final x = Float64List(n);
+    final y = Float64List(n);
+    for (var i = 0; i < n; i++) {
+      // Wavenumber sweep ~4000–7400 cm^-1 (≈ 1350–2500 nm).
+      final wavenumber = 4000.0 + (7400.0 - 4000.0) * i / (n - 1);
+      final nm = 1.0e7 / wavenumber;
+      var value = 0.55 +
+          0.12 * sin((nm - 1400.0) / 210.0) -
+          0.18 * exp(-pow((nm - 1940.0) / 60.0, 2).toDouble()) -
+          0.10 * exp(-pow((nm - 2100.0) / 50.0, 2).toDouble()) +
+          (rnd.nextDouble() - 0.5) * 0.01;
+      if (value < 0.02) value = 0.02;
+      if (value > 0.98) value = 0.98;
+      x[i] = wavenumber;
+      y[i] = value;
+    }
+    return Spectrum(x: x, y: y);
   }
 
   Future<void> runPsd() async {
@@ -190,6 +305,27 @@ extension AppStateScanning on AppState {
 
     await dataStore.saveMeasurement(measurement);
     await dataStore.saveSpectrum(spectrumBlob);
+
+    // When this capture averaged multiple scans, also persist every individual
+    // scan (kind 'scan') alongside the averaged 'raw' blob, so the raw repeats
+    // are recoverable later. Single-scan captures need no extra rows.
+    final scans = acquiredSpectra;
+    if (scans.length > 1) {
+      for (var i = 0; i < scans.length; i++) {
+        final scan = scans[i];
+        await dataStore.saveSpectrum(
+          SpectrumBlob(
+            id: _uuid.v4(),
+            measurementId: measurementId,
+            kind: 'scan_${(i + 1).toString().padLeft(2, '0')}',
+            length: scan.length,
+            xBytes: scan.x.buffer.asUint8List(),
+            yBytes: scan.y.buffer.asUint8List(),
+          ),
+        );
+      }
+    }
+
     statusMessage = 'Session saved';
     if (batchModeEnabled) {
       advanceBatchSample();
@@ -286,6 +422,9 @@ extension AppStateScanning on AppState {
   }
 
   void _syncReferenceFromCurrentIp() {
+    // In test mode the simulated reference is managed by runBackground /
+    // exitTestMode, not by IP freshness — never let an IP change clobber it.
+    if (testMode) return;
     final ip = currentIp.trim();
     if (ip.isEmpty) {
       hasBackground = false;

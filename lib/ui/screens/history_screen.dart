@@ -10,10 +10,13 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../data/storage/data_store.dart';
 import '../../domain/measurement.dart';
+import '../../domain/spectrum.dart';
 import '../../services/app_state.dart';
 import '../../services/i18n.dart';
 import '../theme/app_theme.dart';
+import '../widgets/spectrum_chart.dart';
 import 'compare_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -208,6 +211,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                                       return Text(text);
                                                     }),
                                                   ],
+                                                  const SizedBox(height: 12),
+                                                  // Loaded only when this row is
+                                                  // expanded, so the list stays
+                                                  // light; collapsing disposes it.
+                                                  _HistorySpectrumPreview(
+                                                    key: ValueKey(
+                                                      'preview_${item.id}',
+                                                    ),
+                                                    measurementId: item.id,
+                                                    dataStore: state.dataStore,
+                                                    axisUnit:
+                                                        state.spectrumAxisUnit,
+                                                  ),
                                                 ],
                                               ),
                                             ),
@@ -1333,4 +1349,102 @@ class _EmptyState extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Spectrum chart shown inside an expanded History row. Its spectra are read
+/// from the database only when this widget mounts (i.e. when the row is
+/// expanded), so the list never pre-loads every measurement's blobs. The
+/// averaged 'raw' trace is the main line; individual 'scan_NN' repeats render
+/// as background overlays. No legend (the row is narrow).
+class _HistorySpectrumPreview extends StatefulWidget {
+  const _HistorySpectrumPreview({
+    super.key,
+    required this.measurementId,
+    required this.dataStore,
+    required this.axisUnit,
+  });
+
+  final String measurementId;
+  final DataStore dataStore;
+  final String axisUnit;
+
+  @override
+  State<_HistorySpectrumPreview> createState() =>
+      _HistorySpectrumPreviewState();
+}
+
+class _HistorySpectrumPreviewState extends State<_HistorySpectrumPreview> {
+  late final Future<_PreviewData> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  Future<_PreviewData> _load() async {
+    try {
+      final blobs = await widget.dataStore.getSpectra(widget.measurementId);
+      if (blobs.isEmpty) {
+        return const _PreviewData(main: null, overlays: <Spectrum>[]);
+      }
+      SpectrumBlob? raw;
+      final scans = <SpectrumBlob>[];
+      for (final blob in blobs) {
+        if (blob.kind == 'raw') {
+          raw ??= blob;
+        } else if (blob.kind.startsWith('scan')) {
+          scans.add(blob);
+        }
+      }
+      final mainBlob = raw ?? blobs.first;
+      scans.sort((a, b) => a.kind.compareTo(b.kind));
+      return _PreviewData(
+        main: mainBlob.toSpectrum(),
+        overlays: [for (final s in scans) s.toSpectrum()],
+      );
+    } catch (_) {
+      return const _PreviewData(main: null, overlays: <Spectrum>[]);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<_PreviewData>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const SizedBox(
+            height: 120,
+            child: Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+        final data = snapshot.data;
+        final main = data?.main;
+        if (main == null || main.length == 0) {
+          return const SizedBox.shrink();
+        }
+        return SpectrumChart(
+          spectrum: main,
+          title: '',
+          axisUnit: widget.axisUnit,
+          simplified: true,
+          overlays: data!.overlays,
+        );
+      },
+    );
+  }
+}
+
+class _PreviewData {
+  const _PreviewData({required this.main, required this.overlays});
+
+  final Spectrum? main;
+  final List<Spectrum> overlays;
 }

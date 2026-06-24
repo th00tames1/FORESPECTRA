@@ -41,6 +41,14 @@ extension AppStateSettings on AppState {
       readString(SettingsKeys.spectrumAxisUnit, (v) => spectrumAxisUnit = v);
       readBool(SettingsKeys.showGhNhDiagnostics,
           (v) => showGhNhDiagnostics = v);
+      readString(SettingsKeys.ghWarningThreshold,
+          (v) => ghWarningThreshold = _parseThreshold(v));
+      readString(SettingsKeys.ghOutlierThreshold,
+          (v) => ghOutlierThreshold = _parseThreshold(v));
+      readString(SettingsKeys.nhWarningThreshold,
+          (v) => nhWarningThreshold = _parseThreshold(v));
+      readString(SettingsKeys.nhOutlierThreshold,
+          (v) => nhOutlierThreshold = _parseThreshold(v));
       readBool(SettingsKeys.sendLengthPrefix, (v) {
         sendLengthPrefix = v;
         client.sendLengthPrefix = v;
@@ -58,6 +66,9 @@ extension AppStateSettings on AppState {
           (v) => averagingMethod = AveragingMethodLabel.fromId(v));
       readInt(SettingsKeys.referenceMaxAgeMin,
           (v) => referenceMaxAge = Duration(minutes: v));
+      readBool(SettingsKeys.continuousMode, (v) => continuousMode = v);
+      readInt(SettingsKeys.scanIntervalMs,
+          (v) => scanIntervalMs = _clampInterval(v));
 
       readInt(SettingsKeys.lampsCount, (v) => lampsCount = v);
       readInt(SettingsKeys.lampSelect, (v) => lampSelect = v);
@@ -93,6 +104,28 @@ extension AppStateSettings on AppState {
     }
     targetScanCount = clamped;
     _persist(SettingsKeys.targetScanCount, '$clamped');
+    notifyUi();
+  }
+
+  static const int _minScanIntervalMs = 100;
+  static const int _maxScanIntervalMs = 3000;
+
+  int _clampInterval(int v) => v < _minScanIntervalMs
+      ? _minScanIntervalMs
+      : (v > _maxScanIntervalMs ? _maxScanIntervalMs : v);
+
+  void updateContinuousMode(bool value) {
+    if (value == continuousMode) return;
+    continuousMode = value;
+    _persist(SettingsKeys.continuousMode, '$value');
+    notifyUi();
+  }
+
+  void updateScanIntervalMs(int value) {
+    final clamped = _clampInterval(value);
+    if (clamped == scanIntervalMs) return;
+    scanIntervalMs = clamped;
+    _persist(SettingsKeys.scanIntervalMs, '$clamped');
     notifyUi();
   }
 
@@ -140,6 +173,34 @@ extension AppStateSettings on AppState {
     notifyUi();
   }
 
+  /// Parse a persisted threshold string. Empty/invalid/negative -> null
+  /// (meaning "use the model's baked threshold").
+  double? _parseThreshold(String raw) {
+    final v = double.tryParse(raw.trim());
+    if (v == null || !v.isFinite || v < 0) return null;
+    return v;
+  }
+
+  void _setThreshold(String key, double? value, void Function(double?) assign) {
+    assign(value);
+    _persist(key, value == null ? '' : '$value');
+    _runSelectedModelAnalysis(notify: false);
+    notifyUi();
+  }
+
+  void updateGhWarningThreshold(double? v) =>
+      _setThreshold(SettingsKeys.ghWarningThreshold, v,
+          (x) => ghWarningThreshold = x);
+  void updateGhOutlierThreshold(double? v) =>
+      _setThreshold(SettingsKeys.ghOutlierThreshold, v,
+          (x) => ghOutlierThreshold = x);
+  void updateNhWarningThreshold(double? v) =>
+      _setThreshold(SettingsKeys.nhWarningThreshold, v,
+          (x) => nhWarningThreshold = x);
+  void updateNhOutlierThreshold(double? v) =>
+      _setThreshold(SettingsKeys.nhOutlierThreshold, v,
+          (x) => nhOutlierThreshold = x);
+
   void setTab(int value) {
     if (currentTab == value) return;
     currentTab = value;
@@ -160,6 +221,10 @@ extension AppStateSettings on AppState {
   Future<void> resetSettings() async {
     themeMode = ThemeMode.light;
     showGhNhDiagnostics = false;
+    ghWarningThreshold = null;
+    ghOutlierThreshold = null;
+    nhWarningThreshold = null;
+    nhOutlierThreshold = null;
     spectrumAxisUnit = 'nm';
 
     sendLengthPrefix = false;
@@ -169,6 +234,8 @@ extension AppStateSettings on AppState {
     targetScanCount = 1;
     averagingMethod = AveragingMethod.mean;
     referenceMaxAge = const Duration(hours: 1);
+    continuousMode = false;
+    scanIntervalMs = 400;
 
     lampsCount = 2;
     lampSelect = 0;
@@ -180,6 +247,9 @@ extension AppStateSettings on AppState {
     opticalGainValue = 0;
 
     _syncReferenceFromCurrentIp();
+    // Re-run analysis so cached GH/NH levels reflect the cleared overrides
+    // (the live threshold setters do this via _setThreshold; reset must too).
+    _runSelectedModelAnalysis(notify: false);
     try {
       await dataStore.clearAllSettings();
     } catch (_) {

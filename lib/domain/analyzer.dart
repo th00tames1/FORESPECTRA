@@ -161,7 +161,38 @@ class AnalysisResult {
   }
 }
 
-AnalysisResult runAnalysis(Spectrum spectrum, CalibrationModel model) {
+/// User-supplied overrides for the GH/NH warning and outlier cut-offs.
+///
+/// Each field is nullable: a null field falls back to the threshold baked into
+/// the model JSON. GH/NH are normalised Mahalanobis distances on comparable
+/// scales across the bundled models, so a single global override is meaningful.
+/// "warning" is the value above which a reading is flagged as a warning;
+/// "outlier" is the (higher) value above which it is flagged as an outlier.
+class GhNhThresholds {
+  const GhNhThresholds({
+    this.ghWarning,
+    this.ghOutlier,
+    this.nhWarning,
+    this.nhOutlier,
+  });
+
+  final double? ghWarning;
+  final double? ghOutlier;
+  final double? nhWarning;
+  final double? nhOutlier;
+
+  bool get isEmpty =>
+      ghWarning == null &&
+      ghOutlier == null &&
+      nhWarning == null &&
+      nhOutlier == null;
+}
+
+AnalysisResult runAnalysis(
+  Spectrum spectrum,
+  CalibrationModel model, {
+  GhNhThresholds? thresholds,
+}) {
   var processed = _alignSpectrumAxisForModel(spectrum, model);
   if (model.xAxis.isNotEmpty && model.xAxis.length == model.expectedLength) {
     processed = resampleSpectrum(processed, model.xAxis);
@@ -186,6 +217,7 @@ AnalysisResult runAnalysis(Spectrum spectrum, CalibrationModel model) {
   final ghNh = _computeFossGhNh(
     scaledSpectrum: processed,
     config: model.fossGhNhConfig,
+    overrides: thresholds,
   );
 
   if (model.isTreeEnsemble && model.trees.isNotEmpty) {
@@ -342,6 +374,7 @@ class _FossGhNhValues {
 _FossGhNhValues _computeFossGhNh({
   required Spectrum scaledSpectrum,
   required FossGhNhConfig? config,
+  GhNhThresholds? overrides,
 }) {
   if (config == null || !config.isValid || !config.isPcaScoreSpace) {
     return const _FossGhNhValues();
@@ -397,8 +430,8 @@ _FossGhNhValues _computeFossGhNh({
       gh = sqrt(sum);
       ghLevel = _classifyGhWarningOutlierLevel(
         gh,
-        warningMin: ghConfig.normalMax,
-        outlierMin: ghConfig.warningMax,
+        warningMin: overrides?.ghWarning ?? ghConfig.normalMax,
+        outlierMin: overrides?.ghOutlier ?? ghConfig.warningMax,
       );
     }
   }
@@ -440,8 +473,8 @@ _FossGhNhValues _computeFossGhNh({
         nh = sum / k;
         nhLevel = _classifyDiagnosticLevel(
           nh,
-          normalMax: nhConfig.normalMax,
-          warningMax: nhConfig.warningMax,
+          normalMax: overrides?.nhWarning ?? nhConfig.normalMax,
+          warningMax: overrides?.nhOutlier ?? nhConfig.warningMax,
         );
       }
     }
@@ -525,9 +558,13 @@ String? _classifyGhWarningOutlierLevel(
   if (warningMin == null || !warningMin.isFinite || warningMin < 0) {
     return null;
   }
+  // Keep the outlier cut-off at or above the warning cut-off. A partial
+  // override can otherwise pair a user warning value with a lower baked
+  // outlier value; clamping (rather than dropping it) keeps the outlier level
+  // reachable, matching the parse-time clamp in calibration_model.dart.
   final safeOutlier =
-      (outlierMin != null && outlierMin.isFinite && outlierMin >= warningMin)
-      ? outlierMin
+      (outlierMin != null && outlierMin.isFinite && outlierMin >= 0)
+      ? max(outlierMin, warningMin)
       : null;
   if (safeOutlier != null && value > safeOutlier) {
     return AnalysisResult.levelOutlier;

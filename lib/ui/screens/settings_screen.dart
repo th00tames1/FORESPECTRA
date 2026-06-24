@@ -1,5 +1,8 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../domain/averaging.dart';
 import '../../domain/calibration_model.dart';
@@ -47,6 +50,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 _sectionLabel(context, t('config.advanced')),
                 _advancedCard(context, state),
+
+                const SizedBox(height: 24),
+
+                _sectionLabel(context, t('config.backup')),
+                _backupCard(context, state),
 
                 const SizedBox(height: 24),
 
@@ -158,6 +166,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: Text(t('config.showDiagnostics')),
               subtitle: Text(t('config.showDiagnosticsSubtitle')),
             ),
+            if (state.showGhNhDiagnostics) ...[
+              const SizedBox(height: 4),
+              _subHeader(context, t('config.thresholds')),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                  t('config.thresholdsHint'),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: _ThresholdField(
+                      label: t('config.ghWarning'),
+                      value: state.ghWarningThreshold,
+                      onChanged: state.updateGhWarningThreshold,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _ThresholdField(
+                      label: t('config.ghOutlier'),
+                      value: state.ghOutlierThreshold,
+                      onChanged: state.updateGhOutlierThreshold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _ThresholdField(
+                      label: t('config.nhWarning'),
+                      value: state.nhWarningThreshold,
+                      onChanged: state.updateNhWarningThreshold,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _ThresholdField(
+                      label: t('config.nhOutlier'),
+                      value: state.nhOutlierThreshold,
+                      onChanged: state.updateNhOutlierThreshold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
           ],
         ),
       ),
@@ -408,6 +469,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
               state.updateAveragingMethod(value);
             },
           ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: state.continuousMode,
+            onChanged: state.updateContinuousMode,
+            title: Text(t('config.continuousMode')),
+            subtitle: Text(t('config.continuousModeSubtitle')),
+          ),
+          if (state.continuousMode)
+            _sliderField(
+              context: context,
+              label: t('config.scanInterval'),
+              value: state.scanIntervalMs.toDouble(),
+              min: 100,
+              max: 3000,
+              valueLabel: '${state.scanIntervalMs} ms',
+              onChanged: (v) => state.updateScanIntervalMs(v.round()),
+            ),
           _dropdownField<Duration>(
             context: context,
             label: t('config.referenceExpire'),
@@ -628,14 +706,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Card(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
+        // Force the card to span the full width like every other settings card
+        // (its text content alone would otherwise shrink it to the left).
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
               'Forespectra',
               style: Theme.of(context).textTheme.titleMedium,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
+            Text(
+              'Developed by',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: muted,
+              ),
+            ),
+            const SizedBox(height: 2),
             Text(
               'Heechan Jeong',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -667,6 +755,99 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // History backup / restore
+  // ─────────────────────────────────────────────────────────────────
+
+  Widget _backupCard(BuildContext context, AppState state) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: Column(
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.backup_outlined),
+              title: Text(t('config.backupExport')),
+              subtitle: Text(t('config.backupExportSub')),
+              onTap: () => _exportBackup(context, state),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.restore),
+              title: Text(t('config.backupRestore')),
+              subtitle: Text(t('config.backupRestoreSub')),
+              onTap: () => _restoreBackup(context, state),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _exportBackup(BuildContext context, AppState state) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final path = await state.backupService.exportToFile();
+      await Share.shareXFiles(
+        [
+          XFile(
+            path,
+            mimeType: 'application/json',
+            name: p.basename(path),
+          ),
+        ],
+        subject: 'Forespectra history backup',
+      );
+      if (!context.mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(t('backup.exported'))));
+    } catch (error) {
+      if (!context.mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('${t('backup.exportFailed')}: $error')),
+        );
+    }
+  }
+
+  Future<void> _restoreBackup(BuildContext context, AppState state) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final picked = await FilePicker.platform.pickFiles(type: FileType.any);
+      final path = (picked == null || picked.files.isEmpty)
+          ? null
+          : picked.files.first.path;
+      if (path == null) return;
+      final result = await state.backupService.importFromFile(path);
+      if (!context.mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              '${t('backup.restored')}: ${result.measurementsAdded}',
+            ),
+          ),
+        );
+    } on FormatException {
+      if (!context.mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(t('backup.invalidFile'))));
+    } catch (error) {
+      if (!context.mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('${t('backup.restoreFailed')}: $error')),
+        );
+    }
   }
 
   Future<void> _confirmReset(BuildContext context, AppState state) {
@@ -822,6 +1003,86 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Numeric input for a single GH/NH threshold override. Owns its controller so
+/// typing is never interrupted by parent rebuilds; an empty field means
+/// "use the model's built-in value" (reported back as null).
+class _ThresholdField extends StatefulWidget {
+  const _ThresholdField({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final double? value;
+  final ValueChanged<double?> onChanged;
+
+  @override
+  State<_ThresholdField> createState() => _ThresholdFieldState();
+}
+
+class _ThresholdFieldState extends State<_ThresholdField> {
+  late final TextEditingController _controller;
+  final FocusNode _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: _format(widget.value));
+  }
+
+  @override
+  void didUpdateWidget(covariant _ThresholdField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reflect external changes (e.g. Reset to defaults) without clobbering an
+    // edit the user is in the middle of typing.
+    if (!_focus.hasFocus &&
+        double.tryParse(_controller.text.trim()) != widget.value) {
+      _controller.text = _format(widget.value);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  String _format(double? v) {
+    if (v == null) return '';
+    // Trim a trailing ".0" so 4.0 shows as "4", without an int round-trip
+    // (toInt() saturates for very large doubles).
+    final s = v.toString();
+    return s.endsWith('.0') ? s.substring(0, s.length - 2) : s;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: _controller,
+      focusNode: _focus,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      decoration: InputDecoration(
+        labelText: widget.label,
+        hintText: t('config.thresholdModelDefault'),
+        isDense: true,
+      ),
+      onChanged: (raw) {
+        final trimmed = raw.trim();
+        if (trimmed.isEmpty) {
+          widget.onChanged(null);
+          return;
+        }
+        final parsed = double.tryParse(trimmed);
+        if (parsed != null && parsed.isFinite && parsed >= 0) {
+          widget.onChanged(parsed);
+        }
+      },
     );
   }
 }

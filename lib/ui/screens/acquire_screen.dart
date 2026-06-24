@@ -71,7 +71,7 @@ class _AcquireScreenState extends State<AcquireScreen> {
             state.isScanning ||
             state.isBackgrounding ||
             state.isVerifyingConnection;
-        final canScanTap = state.isConnected && !isBusy;
+        final canScanTap = (state.isConnected || state.testMode) && !isBusy;
         final canCapture = canScanTap && state.hasBackground;
         final statusColor = state.isConnected
             ? AppTheme.success
@@ -84,8 +84,15 @@ class _AcquireScreenState extends State<AcquireScreen> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final isTabletLayout = constraints.maxWidth >= 720;
-                final useSpreadLayout = isTabletLayout && keyboardInset == 0;
-                final contentAlignment = Alignment.topCenter;
+                // On a tablet with the keyboard down there is a lot of vertical
+                // room, so vertically CENTER the content instead of letting it
+                // cluster at the top. When the keyboard is up (or on a phone)
+                // we top-align; the surrounding SingleChildScrollView then
+                // scrolls the focused field into view, so the keyboard can
+                // never cause a layout overflow.
+                final contentAlignment = (isTabletLayout && keyboardInset == 0)
+                    ? Alignment.center
+                    : Alignment.topCenter;
                 final contentMaxWidth = isTabletLayout ? 640.0 : double.infinity;
                 const outerVerticalPadding = 40.0;
                 final availableHeight =
@@ -115,8 +122,6 @@ class _AcquireScreenState extends State<AcquireScreen> {
                               canCapture,
                               isBusy,
                               statusColor,
-                              useSpreadLayout,
-                              minHeight,
                             ),
                           ),
                         ),
@@ -140,18 +145,22 @@ class _AcquireScreenState extends State<AcquireScreen> {
     bool canCapture,
     bool isBusy,
     Color statusColor,
-    bool useSpreadLayout,
-    double availableHeight,
   ) {
     final topSection = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(t('scan.title'), style: Theme.of(context).textTheme.headlineMedium),
+        if (state.testMode && !state.isConnected) ...[
+          const SizedBox(height: 12),
+          _TestModeBanner(onExit: state.exitTestMode),
+        ],
         const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
-            onPressed: state.isConnected && !isBusy ? state.runBackground : null,
+            onPressed: (state.isConnected || state.testMode) && !isBusy
+                ? state.runBackground
+                : null,
             icon: const Icon(Icons.layers),
             label: Text(
               state.hasBackground
@@ -174,11 +183,20 @@ class _AcquireScreenState extends State<AcquireScreen> {
       ],
     );
 
+    final canStopScan = state.isScanning && state.continuousMode;
     final middleSection = Column(
       children: [
         Center(
           child: GestureDetector(
-            onTap: canScanTap ? () => _handleScanTap(context, state) : null,
+            onTap: canScanTap || canStopScan
+                ? () {
+                    if (state.isScanning) {
+                      if (state.continuousMode) state.requestStopScan();
+                      return;
+                    }
+                    _handleScanTap(context, state);
+                  }
+                : null,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               height: buttonSize,
@@ -209,16 +227,18 @@ class _AcquireScreenState extends State<AcquireScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        Icons.auto_graph,
+                        canStopScan ? Icons.stop_rounded : Icons.auto_graph,
                         size: 52,
                         color: canCapture ? Colors.white : AppTheme.muted,
                       ),
                       const SizedBox(height: 10),
                       Text(
                         state.isScanning
-                            ? (state.targetScanCount > 1
-                                ? '${state.currentScanIndex}/${state.targetScanCount}'
-                                : t('scan.scanning'))
+                            ? (canStopScan
+                                ? '${t('scan.stop')} ${state.currentScanIndex}/${state.targetScanCount}'
+                                : (state.targetScanCount > 1
+                                    ? '${state.currentScanIndex}/${state.targetScanCount}'
+                                    : t('scan.scanning')))
                             : t('scan.scan'),
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           letterSpacing: 1.2,
@@ -335,22 +355,6 @@ class _AcquireScreenState extends State<AcquireScreen> {
         ),
       ],
     );
-
-    if (useSpreadLayout) {
-      final upperGap = (availableHeight * 0.10).clamp(36.0, 64.0);
-      final lowerGap = (availableHeight * 0.08).clamp(32.0, 56.0);
-
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          topSection,
-          SizedBox(height: upperGap),
-          middleSection,
-          SizedBox(height: lowerGap),
-          bottomSection,
-        ],
-      );
-    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -628,4 +632,48 @@ class _BatchSetup {
   const _BatchSetup({required this.prefix, required this.start});
   final String prefix;
   final int start;
+}
+
+/// Banner shown on the Scan screen when the developer test mode (simulated
+/// sensor) is active. Tapping it exits back to the Connect screen.
+class _TestModeBanner extends StatelessWidget {
+  const _TestModeBanner({required this.onExit});
+
+  final VoidCallback onExit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onExit,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppTheme.warning.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppTheme.warning.withValues(alpha: 0.5)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.science_outlined, size: 18, color: AppTheme.warning),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  t('scan.testMode'),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppTheme.warning,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Icon(Icons.close, size: 16, color: AppTheme.warning),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

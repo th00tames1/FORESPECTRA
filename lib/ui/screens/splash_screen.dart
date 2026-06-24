@@ -61,6 +61,13 @@ class _SplashScreenState extends State<SplashScreen> {
                     color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
             ),
+            const SizedBox(height: 24),
+            Text(
+              'Developed by Heechan Jeong  ·  © 2026',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
+            ),
           ],
         ),
       ),

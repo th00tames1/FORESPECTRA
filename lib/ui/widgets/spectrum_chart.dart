@@ -13,9 +13,11 @@ class SpectrumChart extends StatefulWidget {
     this.axisUnit = 'nm',
     this.maxPoints = 512,
     this.minY = 0,
-    this.maxY = 1.1,
+    this.maxY = 1.0,
     this.simplified = false,
     this.overlays = const [],
+    this.overlayLegendLabel,
+    this.mainLegendLabel,
   });
 
   final Spectrum? spectrum;
@@ -26,9 +28,14 @@ class SpectrumChart extends StatefulWidget {
   final double maxY;
   final bool simplified;
 
-  /// Additional spectra rendered as faded background traces.
-  /// Useful for displaying every individual scan under the averaged trace.
+  /// Additional spectra rendered as background traces (one per individual
+  /// scan) underneath the bold main/averaged trace.
   final List<Spectrum> overlays;
+
+  /// When set together with [mainLegendLabel] and at least one overlay, a small
+  /// legend is drawn under the title identifying the overlay vs main traces.
+  final String? overlayLegendLabel;
+  final String? mainLegendLabel;
 
   @override
   State<SpectrumChart> createState() => _SpectrumChartState();
@@ -59,9 +66,13 @@ class _SpectrumChartState extends State<SpectrumChart> {
 
   @override
   Widget build(BuildContext context) {
+    final overlayLineColor = AppTheme.muted.withValues(alpha: 0.55);
+    final showLegend = widget.overlays.isNotEmpty &&
+        widget.overlayLegendLabel != null &&
+        widget.mainLegendLabel != null;
     return Card(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 16, 8, 12),
+        padding: const EdgeInsets.fromLTRB(2, 14, 2, 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -73,7 +84,30 @@ class _SpectrumChartState extends State<SpectrumChart> {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
+            ],
+            if (showLegend) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  children: [
+                    _legendSwatch(
+                      context,
+                      color: overlayLineColor,
+                      label: widget.overlayLegendLabel!,
+                      thickness: 1.5,
+                    ),
+                    const SizedBox(width: 16),
+                    _legendSwatch(
+                      context,
+                      color: AppTheme.accent,
+                      label: widget.mainLegendLabel!,
+                      thickness: 3,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
             ],
             SizedBox(
               height: 280,
@@ -85,15 +119,14 @@ class _SpectrumChartState extends State<SpectrumChart> {
                       _ChartData(main: [const FlSpot(0, 0)], overlays: const []);
                   final enableTouch = !widget.simplified;
                   final xInterval = _computeXInterval(data.main);
-                  final overlayColor = AppTheme.accent.withValues(alpha: 0.22);
                   final overlayBars = [
                     for (final spots in data.overlays)
                       LineChartBarData(
                         spots: spots,
                         isCurved: false,
-                        barWidth: 1.0,
+                        barWidth: 1.1,
                         dotData: FlDotData(show: false),
-                        color: overlayColor,
+                        color: overlayLineColor,
                         belowBarData: BarAreaData(show: false),
                       ),
                   ];
@@ -117,13 +150,15 @@ class _SpectrumChartState extends State<SpectrumChart> {
                         leftTitles: AxisTitles(
                           sideTitles: SideTitles(
                             showTitles: true,
-                            reservedSize: 26,
+                            reservedSize: 22,
                             interval: 0.2,
                             minIncluded: true,
                             maxIncluded: true,
                             getTitlesWidget: (value, meta) {
                               return SideTitleWidget(
                                 axisSide: meta.axisSide,
+                                fitInside:
+                                    SideTitleFitInsideData.fromTitleMeta(meta),
                                 child: Text(
                                   value.toStringAsFixed(1),
                                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -152,6 +187,10 @@ class _SpectrumChartState extends State<SpectrumChart> {
                             getTitlesWidget: (value, meta) {
                               return SideTitleWidget(
                                 axisSide: meta.axisSide,
+                                // Keep the first/last labels inside the plot box
+                                // instead of overflowing the right edge.
+                                fitInside:
+                                    SideTitleFitInsideData.fromTitleMeta(meta),
                                 child: Text(
                                   _formatAxisValue(value),
                                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -186,7 +225,9 @@ class _SpectrumChartState extends State<SpectrumChart> {
                         LineChartBarData(
                           spots: data.main,
                           isCurved: !widget.simplified,
-                          barWidth: widget.simplified ? 1.6 : 2.2,
+                          barWidth: widget.simplified
+                              ? 1.6
+                              : (overlayBars.isEmpty ? 2.2 : 2.6),
                           dotData: FlDotData(show: false),
                           color: AppTheme.accent,
                           belowBarData: BarAreaData(
@@ -210,6 +251,27 @@ class _SpectrumChartState extends State<SpectrumChart> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _legendSwatch(
+    BuildContext context, {
+    required Color color,
+    required String label,
+    required double thickness,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(width: 18, height: thickness, color: color),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: AppTheme.muted,
+              ),
+        ),
+      ],
     );
   }
 
@@ -255,9 +317,12 @@ class _SpectrumChartState extends State<SpectrumChart> {
     final points = <FlSpot>[];
     var dn = 1;
     for (var i = 0; i < spectrum.length; i += stride) {
+      final yv = spectrum.y[i];
       final x = _toAxisValue(spectrum.x[i], dn);
-      points.add(FlSpot(x, spectrum.y[i]));
       dn += 1;
+      // Skip non-finite samples; fl_chart throws on NaN/Inf spots.
+      if (!x.isFinite || !yv.isFinite) continue;
+      points.add(FlSpot(x, yv));
     }
     if (widget.axisUnit != 'DN') {
       points.sort((a, b) => a.x.compareTo(b.x));
@@ -309,7 +374,9 @@ class _SpectrumChartState extends State<SpectrumChart> {
     if (range <= 0 || !range.isFinite) {
       return 1;
     }
-    final interval = range / 4;
+    // 3 intervals => 4 labels: enough to read the axis without the nm numbers
+    // crowding into each other.
+    final interval = range / 3;
     if (!interval.isFinite || interval <= 0) {
       return 1;
     }
@@ -345,18 +412,23 @@ List<double> _downsamplePairs(Map<String, Object> args) {
   final pairs = <double>[];
   var dn = 1;
   for (var i = 0; i < length; i += stride) {
+    final double xv;
     if (axisUnit == 'DN') {
-      pairs.add(dn.toDouble());
+      xv = dn.toDouble();
     } else if (axisUnit == 'cm^-1') {
-      pairs.add(x[i]);
+      xv = x[i];
     } else if (axisUnit == 'nm') {
       final raw = x[i];
-      pairs.add(raw <= 0 ? 0 : 10000000.0 / raw);
+      xv = raw <= 0 ? 0 : 10000000.0 / raw;
     } else {
-      pairs.add(x[i]);
+      xv = x[i];
     }
-    pairs.add(y[i]);
+    final yv = y[i];
     dn += 1;
+    // Skip non-finite samples; fl_chart throws on NaN/Inf spots.
+    if (!xv.isFinite || !yv.isFinite) continue;
+    pairs.add(xv);
+    pairs.add(yv);
   }
   return pairs;
 }

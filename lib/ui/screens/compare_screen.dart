@@ -43,7 +43,12 @@ class _CompareScreenState extends State<CompareScreen> {
     for (var i = 0; i < measurements.length; i++) {
       final blobs = blobLists[i];
       if (blobs.isEmpty) continue;
-      final blob = blobs.first;
+      // Prefer the averaged 'raw' blob; a measurement may now also hold the
+      // individual 'scan_NN' repeats from a multi-scan capture.
+      final blob = blobs.firstWhere(
+        (b) => b.kind == 'raw',
+        orElse: () => blobs.first,
+      );
       results.add(_TraceData(
         measurement: measurements[i],
         x: blob.xBytes.buffer.asFloat64List(),

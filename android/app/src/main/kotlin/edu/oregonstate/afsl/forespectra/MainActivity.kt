@@ -1,4 +1,4 @@
-package com.example.spectral_app
+package edu.oregonstate.afsl.forespectra
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -57,7 +57,12 @@ class _HomeShellState extends State<HomeShell> {
                 height: 64,
                 selectedIndex: state.currentTab,
                 onDestinationSelected: (value) {
-                  if (!state.isConnected && value == 1) return;
+                  // Scan tab while disconnected: count taps toward the hidden
+                  // developer test-mode unlock instead of navigating.
+                  if (value == 1 && !state.isConnected && !state.testMode) {
+                    state.registerScanTabTap();
+                    return;
+                  }
                   state.setTab(value);
                 },
                 destinations: [
@@ -68,7 +73,6 @@ class _HomeShellState extends State<HomeShell> {
                   NavigationDestination(
                     icon: const Icon(Icons.auto_graph),
                     label: t('nav.scan'),
-                    enabled: state.isConnected,
                   ),
                   NavigationDestination(
                     icon: const Icon(Icons.history),

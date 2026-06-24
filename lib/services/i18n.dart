@@ -69,6 +69,7 @@ const Map<String, String> _en = {
   'connect.reachableHost': 'Reachable host',
   'connect.searchAgain': 'Search again',
   'connect.module': 'Module',
+  'connect.autoConnect': 'Auto-connect to available device',
 
   'onboarding.skip': 'Skip',
   'onboarding.start': "Let's go",
@@ -92,6 +93,8 @@ const Map<String, String> _en = {
   'scan.title': 'Scan',
   'scan.scanning': 'SCANNING...',
   'scan.scan': 'SCAN',
+  'scan.stop': 'STOP',
+  'scan.testMode': 'TEST MODE — simulated sensor (no hardware). Tap to exit.',
   'scan.setReference': 'Set reference',
   'scan.referenceSet': 'Reference set',
   'scan.material': 'Material name',
@@ -122,7 +125,8 @@ const Map<String, String> _en = {
   'results.spectrumPreview': 'Spectrum Preview',
   'results.averagedSpectrum': 'Averaged spectrum',
   'results.scans': 'scans',
-  'results.fadedLinesHint': 'Faded lines: individual scans. Bold line: averaged.',
+  'results.legendIndividual': 'Individual scans',
+  'results.legendAverage': 'Average',
   'results.confirmSave': 'Confirm Save',
   'results.analysis': 'Analysis',
   'results.noModel':
@@ -171,12 +175,35 @@ const Map<String, String> _en = {
       'Restore all preferences. Saved sensors and history are kept.',
   'config.measurementSettings': 'Measurement settings',
   'config.measurementSubtitle': 'Capture, scan, and device parameters',
+  'config.backup': 'History backup',
+  'config.backupExport': 'Export backup',
+  'config.backupExportSub':
+      'Save all scans and spectra to a file you can keep or move to another '
+          'phone.',
+  'config.backupRestore': 'Restore backup',
+  'config.backupRestoreSub':
+      'Load a backup file. Missing records are added; existing history is kept.',
+  'backup.exported': 'Backup file created',
+  'backup.exportFailed': 'Backup failed',
+  'backup.restored': 'Scans restored',
+  'backup.restoreFailed': 'Restore failed',
+  'backup.invalidFile': 'That file is not a Forespectra backup.',
   'config.models': 'Models',
   'config.about': 'About',
   'config.axisUnit': 'Spectrum axis unit',
   'config.showDiagnostics': 'Show GH/NH diagnostics',
   'config.showDiagnosticsSubtitle':
       'Display model diagnostics next to predictions.',
+  'config.thresholds': 'GH/NH thresholds',
+  'config.thresholdsHint':
+      'Leave blank to use each model\'s built-in value. A reading above the '
+          'warning value is flagged as a warning; above the outlier value, an '
+          'outlier.',
+  'config.ghWarning': 'GH warning',
+  'config.ghOutlier': 'GH outlier',
+  'config.nhWarning': 'NH warning',
+  'config.nhOutlier': 'NH outlier',
+  'config.thresholdModelDefault': 'Model default',
   'config.modelsNone': 'No bundled models available.',
   'config.modelsHint': 'Tap a row for details • check to include in Scan',
   'config.rowAlgorithm': 'ALGORITHM',
@@ -187,6 +214,11 @@ const Map<String, String> _en = {
   'config.capture': 'Capture',
   'config.scansPerCapture': 'Scans per capture',
   'config.combineMethod': 'Combine method',
+  'config.continuousMode': 'Continuous sweep mode',
+  'config.continuousModeSubtitle':
+      'Pause between scans so you can move the probe across the sample. Tap '
+          'the scan circle to stop early; collected scans are averaged.',
+  'config.scanInterval': 'Scan interval',
   'config.referenceExpire': 'Reference auto-expire',
   'config.expire30min': '30 min',
   'config.expire1h': '1 hour',
@@ -279,6 +311,7 @@ const Map<String, String> _ko = {
   'connect.reachableHost': '연결 가능한 호스트',
   'connect.searchAgain': '다시 검색',
   'connect.module': '모듈',
+  'connect.autoConnect': '연결 가능한 기기에 자동 연결',
 
   'onboarding.skip': '건너뛰기',
   'onboarding.start': '시작하기',
@@ -302,6 +335,8 @@ const Map<String, String> _ko = {
   'scan.title': '측정',
   'scan.scanning': '측정 중...',
   'scan.scan': '측정',
+  'scan.stop': '정지',
+  'scan.testMode': '테스트 모드 — 가상 센서(하드웨어 없음). 탭하여 종료.',
   'scan.setReference': '레퍼런스 설정',
   'scan.referenceSet': '레퍼런스 설정됨',
   'scan.material': '재료 이름',
@@ -331,7 +366,8 @@ const Map<String, String> _ko = {
   'results.spectrumPreview': '스펙트럼 미리보기',
   'results.averagedSpectrum': '평균 스펙트럼',
   'results.scans': '회 측정',
-  'results.fadedLinesHint': '흐린 선: 개별 측정. 굵은 선: 평균.',
+  'results.legendIndividual': '개별 측정',
+  'results.legendAverage': '평균',
   'results.confirmSave': '저장 확인',
   'results.analysis': '분석',
   'results.noModel': '적용된 모델이 없습니다. 측정 탭의 모델 버튼에서 모델을 선택하세요.',
@@ -379,11 +415,33 @@ const Map<String, String> _ko = {
       '모든 설정을 기본값으로 되돌립니다. 저장된 센서와 기록은 유지됩니다.',
   'config.measurementSettings': '측정 설정',
   'config.measurementSubtitle': '캡처, 스캔 및 기기 파라미터',
+  'config.backup': '기록 백업',
+  'config.backupExport': '백업 내보내기',
+  'config.backupExportSub':
+      '모든 측정 기록과 스펙트럼을 파일로 저장합니다. 보관하거나 다른 폰으로 '
+          '옮길 수 있습니다.',
+  'config.backupRestore': '백업 복원',
+  'config.backupRestoreSub':
+      '백업 파일을 불러옵니다. 없는 기록만 추가되고 기존 기록은 유지됩니다.',
+  'backup.exported': '백업 파일이 생성되었습니다',
+  'backup.exportFailed': '백업 실패',
+  'backup.restored': '복원된 측정 기록',
+  'backup.restoreFailed': '복원 실패',
+  'backup.invalidFile': 'Forespectra 백업 파일이 아닙니다.',
   'config.models': '모델',
   'config.about': '정보',
   'config.axisUnit': '스펙트럼 축 단위',
   'config.showDiagnostics': 'GH/NH 진단 표시',
   'config.showDiagnosticsSubtitle': '예측값 옆에 모델 진단을 표시합니다.',
+  'config.thresholds': 'GH/NH 기준값',
+  'config.thresholdsHint':
+      '비워 두면 각 모델에 내장된 값을 사용합니다. 측정값이 Warning 값을 넘으면 '
+          '경고, Outlier 값을 넘으면 이상치로 표시됩니다.',
+  'config.ghWarning': 'GH Warning',
+  'config.ghOutlier': 'GH Outlier',
+  'config.nhWarning': 'NH Warning',
+  'config.nhOutlier': 'NH Outlier',
+  'config.thresholdModelDefault': '모델 기본값',
   'config.modelsNone': '사용 가능한 내장 모델이 없습니다.',
   'config.modelsHint': '자세히 보려면 행을 탭 • 측정에 포함하려면 체크',
   'config.rowAlgorithm': '알고리즘',
@@ -394,6 +452,11 @@ const Map<String, String> _ko = {
   'config.capture': '캡처',
   'config.scansPerCapture': '캡처당 측정 횟수',
   'config.combineMethod': '평균 방식',
+  'config.continuousMode': '연속 측정(스윕) 모드',
+  'config.continuousModeSubtitle':
+      '측정 사이에 간격을 두어 프로브를 시료 위로 이동하며 측정합니다. 측정 '
+          '원을 탭하면 조기 종료되고, 수집된 측정값을 평균냅니다.',
+  'config.scanInterval': '측정 간격',
   'config.referenceExpire': '레퍼런스 자동 만료',
   'config.expire30min': '30분',
   'config.expire1h': '1시간',

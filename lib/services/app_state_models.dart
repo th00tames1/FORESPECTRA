@@ -88,7 +88,7 @@ extension AppStateModels on AppState {
         continue;
       }
       try {
-        outputs.add(runAnalysis(spectrum, model));
+        outputs.add(runAnalysis(spectrum, model, thresholds: ghNhThresholds));
       } catch (_) {
         // Ignore model failures for this scan.
       }

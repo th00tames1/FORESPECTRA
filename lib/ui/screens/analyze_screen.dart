@@ -73,17 +73,12 @@ class _AnalyzeScreenState extends State<AnalyzeScreen> {
                         : t('results.spectrumPreview'),
                     axisUnit: state.spectrumAxisUnit,
                     overlays: hasMultiple ? acquired : const [],
+                    overlayLegendLabel: hasMultiple
+                        ? '${t('results.legendIndividual')} (${acquired.length})'
+                        : null,
+                    mainLegendLabel:
+                        hasMultiple ? t('results.legendAverage') : null,
                   ),
-                  if (hasMultiple) ...[
-                    const SizedBox(height: 6),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Text(
-                        t('results.fadedLinesHint'),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,

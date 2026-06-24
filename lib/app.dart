@@ -18,6 +18,7 @@ class SpectralApp extends StatelessWidget {
         builder: (context, state, _) {
           return MaterialApp(
             title: 'Forespectra',
+            debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
             themeMode: state.themeMode,

@@ -63,6 +63,25 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
 
+  # Generates platform launcher icons from APP_ICON.png. Re-run after changing
+  # the source image with: dart run flutter_launcher_icons
+  flutter_launcher_icons: ^0.14.1
+
+# Launcher-icon generation config (consumed by flutter_launcher_icons).
+flutter_launcher_icons:
+  image_path: "APP_ICON.png"
+  android: true
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "APP_ICON.png"
+  ios: true
+  remove_alpha_ios: true
+  web:
+    generate: true
+  windows:
+    generate: true
+  macos:
+    generate: true
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 

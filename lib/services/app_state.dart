@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:permission_handler/permission_handler.dart';
@@ -14,6 +16,7 @@ import '../domain/averaging.dart';
 import '../domain/calibration_model.dart';
 import '../domain/measurement.dart';
 import '../domain/spectrum.dart';
+import 'backup_service.dart';
 import 'i18n.dart';
 import 'location_service.dart';
 import 'mdns_discovery.dart';
@@ -59,6 +62,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   final SiNirClient client = SiNirClient();
   final DataStore dataStore = DataStore();
   final LocationService locationService = LocationService();
+  late final BackupService backupService = BackupService(dataStore);
   final Uuid _uuid = const Uuid();
 
   bool isConnecting = false;
@@ -69,6 +73,11 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   String currentIp = '10.92.71.8';
   bool sendLengthPrefix = false;
   bool showGhNhDiagnostics = false;
+  // GH/NH threshold overrides. Null = fall back to each model's baked value.
+  double? ghWarningThreshold;
+  double? ghOutlierThreshold;
+  double? nhWarningThreshold;
+  double? nhOutlierThreshold;
   bool hasBackground = false;
   bool isBackgrounding = false;
   bool isScanning = false;
@@ -117,6 +126,19 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   List<Spectrum> acquiredSpectra = const [];
   int currentScanIndex = 0;
 
+  // Continuous-sweep mode: space the scans out by [scanIntervalMs] so the user
+  // can move the probe across a heterogeneous sample between captures. The
+  // capture still runs up to [targetScanCount] scans but can be stopped early.
+  bool continuousMode = false;
+  int scanIntervalMs = 400;
+  bool stopScanRequested = false;
+
+  // Developer test mode: lets the Scan flow run with a simulated sensor (no
+  // hardware) for testing. Unlocked by tapping the Scan tab 10 times while
+  // disconnected; cleared automatically when a real sensor connects.
+  bool testMode = false;
+  int scanTabTapCount = 0;
+
   // Batch mode: keep material name across saves, auto-increment sample suffix.
   bool batchModeEnabled = false;
   String batchSamplePrefix = '';
@@ -125,6 +147,14 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   /// Public wrapper around the `@protected` [notifyListeners] so the concern
   /// extensions in the part files can request a UI rebuild.
   void notifyUi() => notifyListeners();
+
+  /// Current GH/NH threshold overrides, passed to the analyzer on every run.
+  GhNhThresholds get ghNhThresholds => GhNhThresholds(
+    ghWarning: ghWarningThreshold,
+    ghOutlier: ghOutlierThreshold,
+    nhWarning: nhWarningThreshold,
+    nhOutlier: nhOutlierThreshold,
+  );
 
   Future<void> initialize() async {
     WidgetsBinding.instance.addObserver(this);

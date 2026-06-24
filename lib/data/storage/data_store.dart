@@ -308,16 +308,79 @@ class DataStore {
       where: 'measurement_id = ?',
       whereArgs: [measurementId],
     );
-    return rows.map((row) {
-      return SpectrumBlob(
-        id: row['id'] as String,
-        measurementId: row['measurement_id'] as String,
-        kind: row['kind'] as String,
-        length: row['length'] as int,
-        xBytes: row['x_blob'] as Uint8List,
-        yBytes: row['y_blob'] as Uint8List,
-      );
-    }).toList();
+    return rows.map(_spectrumBlobFromRow).toList();
+  }
+
+  /// Every spectrum blob across all measurements. Used by the backup export.
+  Future<List<SpectrumBlob>> listAllSpectra() async {
+    final rows = await _database.query('spectra');
+    return rows.map(_spectrumBlobFromRow).toList();
+  }
+
+  SpectrumBlob _spectrumBlobFromRow(Map<String, Object?> row) {
+    return SpectrumBlob(
+      id: row['id'] as String,
+      measurementId: row['measurement_id'] as String,
+      kind: row['kind'] as String,
+      length: row['length'] as int,
+      xBytes: row['x_blob'] as Uint8List,
+      yBytes: row['y_blob'] as Uint8List,
+    );
+  }
+
+  /// Merge a backup into the database: insert only rows whose id is not already
+  /// present, so existing history is never overwritten or deleted. Returns how
+  /// many new rows were added.
+  Future<({int measurementsAdded, int spectraAdded})> importBackup({
+    required List<Measurement> measurements,
+    required List<SpectrumBlob> spectra,
+  }) async {
+    final db = _database;
+    final existingMeasurements = (await db.query('measurements', columns: ['id']))
+        .map((r) => r['id'] as String)
+        .toSet();
+    final existingSpectra = (await db.query('spectra', columns: ['id']))
+        .map((r) => r['id'] as String)
+        .toSet();
+
+    var measurementsAdded = 0;
+    var spectraAdded = 0;
+    await db.transaction((txn) async {
+      for (final m in measurements) {
+        // Skip ids already in the DB or already inserted earlier in this same
+        // backup (an in-list duplicate), so the count never exceeds rows added.
+        if (!existingMeasurements.add(m.id)) continue;
+        await txn.insert('measurements', {
+          'id': m.id,
+          'device_id': m.deviceId,
+          'timestamp': m.timestamp.millisecondsSinceEpoch,
+          'scan_time_ms': m.scanTimeMs,
+          'params_json': m.paramsJson,
+          'material_name': m.materialName,
+          'sample_name': m.sampleName,
+          'lat': m.latitude,
+          'lon': m.longitude,
+          'model_id': m.modelId,
+          'model_ids_json': m.modelIdsJson,
+          'results_json': m.resultsJson,
+          'analysis_summary': m.analysisSummary,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        measurementsAdded += 1;
+      }
+      for (final s in spectra) {
+        if (!existingSpectra.add(s.id)) continue;
+        await txn.insert('spectra', {
+          'id': s.id,
+          'measurement_id': s.measurementId,
+          'kind': s.kind,
+          'length': s.length,
+          'x_blob': s.xBytes,
+          'y_blob': s.yBytes,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        spectraAdded += 1;
+      }
+    });
+    return (measurementsAdded: measurementsAdded, spectraAdded: spectraAdded);
   }
 
   Future<void> renameMeasurementSampleName(

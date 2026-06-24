@@ -254,6 +254,10 @@ class _ConnectScreenState extends State<ConnectScreen> {
     if (!mounted) {
       return;
     }
+    if (action.auto) {
+      await appState.connectToBestAvailable();
+      return;
+    }
     if (action.sensor != null) {
       await appState.connectToSensor(action.sensor!);
       return;
@@ -266,11 +270,20 @@ class _ConnectScreenState extends State<ConnectScreen> {
 }
 
 class _SensorPickerAction {
-  const _SensorPickerAction.select(this.sensor) : manualIp = null;
-  const _SensorPickerAction.manual(this.manualIp) : sensor = null;
+  const _SensorPickerAction.select(this.sensor)
+      : manualIp = null,
+        auto = false;
+  const _SensorPickerAction.manual(this.manualIp)
+      : sensor = null,
+        auto = false;
+  const _SensorPickerAction.auto()
+      : sensor = null,
+        manualIp = null,
+        auto = true;
 
   final DiscoveredSensor? sensor;
   final String? manualIp;
+  final bool auto;
 }
 
 class _SensorPickerSheet extends StatefulWidget {
@@ -328,6 +341,21 @@ class _SensorPickerSheetState extends State<_SensorPickerSheet> {
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppTheme.muted,
                       ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed:
+                        state.hasConnectableDevice && !state.isConnecting
+                            ? () => Navigator.pop(
+                                  context,
+                                  const _SensorPickerAction.auto(),
+                                )
+                            : null,
+                    icon: const Icon(Icons.flash_on),
+                    label: Text(t('connect.autoConnect')),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
