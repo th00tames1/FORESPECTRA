@@ -63,7 +63,7 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
 
-  # Generates platform launcher icons from APP_ICON.png. Re-run after changing
+  # Generates platform launcher icons from APP_ICON2.png. Re-run after changing
   # the source image with: dart run flutter_launcher_icons
   flutter_launcher_icons: ^0.14.1
 

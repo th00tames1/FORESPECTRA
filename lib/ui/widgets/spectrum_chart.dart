@@ -184,6 +184,8 @@ class _SpectrumChartState extends State<SpectrumChart> {
                             showTitles: true,
                             reservedSize: 26,
                             interval: xInterval,
+                            minIncluded: true,
+                            maxIncluded: true,
                             getTitlesWidget: (value, meta) {
                               return SideTitleWidget(
                                 axisSide: meta.axisSide,
@@ -374,9 +376,10 @@ class _SpectrumChartState extends State<SpectrumChart> {
     if (range <= 0 || !range.isFinite) {
       return 1;
     }
-    // 3 intervals => 4 labels: enough to read the axis without the nm numbers
-    // crowding into each other.
-    final interval = range / 3;
+    // One interval == the whole range => only the two endpoint labels (e.g.
+    // 1350 and 2550). Any middle label collides with the fitInside-shifted end
+    // labels on a narrow chart, so we drop it entirely.
+    final interval = range;
     if (!interval.isFinite || interval <= 0) {
       return 1;
     }

@@ -24,7 +24,6 @@ class SettingsKeys {
   static const averagingMethod = 'averagingMethod';
   static const referenceMaxAgeMin = 'referenceMaxAgeMin';
   static const continuousMode = 'continuousMode';
-  static const scanIntervalMs = 'scanIntervalMs';
 
   static const lampsCount = 'lampsCount';
   static const lampSelect = 'lampSelect';

@@ -46,7 +46,7 @@ const Map<String, String> _en = {
   'nav.connect': 'Connect',
   'nav.scan': 'Scan',
   'nav.history': 'History',
-  'nav.config': 'Config',
+  'nav.config': 'Settings',
 
   'connect.initialize': 'INITIALIZE',
   'connect.online': 'ONLINE',
@@ -76,7 +76,7 @@ const Map<String, String> _en = {
   'onboarding.title1': 'Turn on hotspot first',
   'onboarding.body1':
       'Forespectra connects to the Si-NIR sensor over Wi-Fi. Turn on your '
-          'phone hotspot and power on the sensor — it joins automatically.',
+          'phone hotspot and power on the sensor. It joins automatically.',
   'onboarding.title2': 'Tap INITIALIZE to connect',
   'onboarding.body2':
       'On the first screen, tap the big INITIALIZE circle. The app will '
@@ -94,7 +94,7 @@ const Map<String, String> _en = {
   'scan.scanning': 'SCANNING...',
   'scan.scan': 'SCAN',
   'scan.stop': 'STOP',
-  'scan.testMode': 'TEST MODE — simulated sensor (no hardware). Tap to exit.',
+  'scan.testMode': 'TEST MODE: simulated sensor (no hardware). Tap to exit.',
   'scan.setReference': 'Set reference',
   'scan.referenceSet': 'Reference set',
   'scan.material': 'Material name',
@@ -161,7 +161,7 @@ const Map<String, String> _en = {
   'history.noScans': 'No scans yet',
   'history.noScansBody': 'Capture your first scan from the Scan tab.',
 
-  'config.title': 'Config',
+  'config.title': 'Settings',
   'config.general': 'General',
   'config.advanced': 'Advanced',
   'config.theme': 'Theme',
@@ -214,11 +214,16 @@ const Map<String, String> _en = {
   'config.capture': 'Capture',
   'config.scansPerCapture': 'Scans per capture',
   'config.combineMethod': 'Combine method',
-  'config.continuousMode': 'Continuous sweep mode',
+  'config.continuousMode': 'Continuous capture',
   'config.continuousModeSubtitle':
-      'Pause between scans so you can move the probe across the sample. Tap '
-          'the scan circle to stop early; collected scans are averaged.',
-  'config.scanInterval': 'Scan interval',
+      'On: one Scan press auto-captures all scans back-to-back (as fast as the '
+          'sensor allows). Off: press Scan once per scan, repositioning between.',
+  'config.scanSettings': 'Scan',
+  'config.scanSettingsSub': 'Scan count, averaging, capture mode',
+  'config.generalSubtitle': 'Theme, language, spectrum axis',
+  'config.advancedSubtitle':
+      'Expert sensor parameters. Leave as-is unless you know what you change.',
+  'config.modelsSubtitle': 'Active models and GH/NH diagnostics',
   'config.referenceExpire': 'Reference auto-expire',
   'config.expire30min': '30 min',
   'config.expire1h': '1 hour',
@@ -336,7 +341,7 @@ const Map<String, String> _ko = {
   'scan.scanning': '측정 중...',
   'scan.scan': '측정',
   'scan.stop': '정지',
-  'scan.testMode': '테스트 모드 — 가상 센서(하드웨어 없음). 탭하여 종료.',
+  'scan.testMode': '테스트 모드: 가상 센서(하드웨어 없음). 탭하여 종료.',
   'scan.setReference': '레퍼런스 설정',
   'scan.referenceSet': '레퍼런스 설정됨',
   'scan.material': '재료 이름',
@@ -452,11 +457,15 @@ const Map<String, String> _ko = {
   'config.capture': '캡처',
   'config.scansPerCapture': '캡처당 측정 횟수',
   'config.combineMethod': '평균 방식',
-  'config.continuousMode': '연속 측정(스윕) 모드',
+  'config.continuousMode': '연속 자동 측정',
   'config.continuousModeSubtitle':
-      '측정 사이에 간격을 두어 프로브를 시료 위로 이동하며 측정합니다. 측정 '
-          '원을 탭하면 조기 종료되고, 수집된 측정값을 평균냅니다.',
-  'config.scanInterval': '측정 간격',
+      '켜짐: 측정 한 번으로 모든 스캔을 연속 자동 취득(센서 속도만큼 빠르게). '
+          '꺼짐: 스캔마다 측정 버튼을 직접 눌러 한 장씩 취득(지점 이동 가능).',
+  'config.scanSettings': 'Scan',
+  'config.scanSettingsSub': '측정 횟수 · 평균 방식 · 캡처 모드',
+  'config.generalSubtitle': '테마 · 언어 · 스펙트럼 축',
+  'config.advancedSubtitle': '전문가용 센서 파라미터. 잘 모르면 그대로 두세요.',
+  'config.modelsSubtitle': '사용 모델 및 GH/NH 진단',
   'config.referenceExpire': '레퍼런스 자동 만료',
   'config.expire30min': '30분',
   'config.expire1h': '1시간',

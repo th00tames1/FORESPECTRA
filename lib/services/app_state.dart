@@ -126,12 +126,15 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   List<Spectrum> acquiredSpectra = const [];
   int currentScanIndex = 0;
 
-  // Continuous-sweep mode: space the scans out by [scanIntervalMs] so the user
-  // can move the probe across a heterogeneous sample between captures. The
-  // capture still runs up to [targetScanCount] scans but can be stopped early.
+  // Continuous mode ON  -> one Scan tap auto-captures all [targetScanCount]
+  //                        scans back-to-back (as fast as the sensor responds).
+  // Continuous mode OFF -> manual: each Scan tap captures one scan; the user
+  //                        presses Scan again for the next, until N collected.
   bool continuousMode = false;
-  int scanIntervalMs = 400;
   bool stopScanRequested = false;
+
+  // In-progress manual capture (continuous mode off, targetScanCount > 1).
+  List<Spectrum> manualBuffer = const [];
 
   // Developer test mode: lets the Scan flow run with a simulated sensor (no
   // hardware) for testing. Unlocked by tapping the Scan tab 10 times while

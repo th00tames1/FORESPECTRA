@@ -159,6 +159,23 @@ class AppTheme {
         valueIndicatorColor: _inkLight,
         valueIndicatorTextStyle: textTheme.labelSmall?.copyWith(color: Colors.white),
       ),
+      // Off switch reads as clearly interactive (a solid slate thumb on an
+      // outlined track) instead of the faint M3 default that looks disabled.
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) return _stoneLight;
+          if (states.contains(WidgetState.selected)) return Colors.white;
+          return _slateLight;
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return _osuOrange;
+          return _surfaceLight;
+        }),
+        trackOutlineColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return Colors.transparent;
+          return _hairlineStrongLight;
+        }),
+      ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: _navSurfaceLight,
         surfaceTintColor: Colors.transparent,
@@ -321,6 +338,21 @@ class AppTheme {
         inactiveTrackColor: _hairlineDark,
         thumbColor: _osuOrange,
         overlayColor: _osuOrange.withValues(alpha: 0.18),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) return _hairlineDark;
+          if (states.contains(WidgetState.selected)) return Colors.white;
+          return _slateDark;
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return _osuOrange;
+          return _surfaceDark;
+        }),
+        trackOutlineColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return Colors.transparent;
+          return _slateDark;
+        }),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: _canvasDark,

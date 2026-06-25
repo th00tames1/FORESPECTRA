@@ -886,7 +886,7 @@ class CalibrationModel {
       }
     }
     // Fall back to the binary linear_head if linear_heads is absent.
-    // For tree ensembles `coefficients` is empty — analyzer routes by type.
+    // For tree ensembles `coefficients` is empty - analyzer routes by type.
     final coeffs = coefficientsByClass.isNotEmpty
         ? coefficientsByClass.first.toList()
         : _asDoubleList(linearHead['coef'] as List<dynamic>?);

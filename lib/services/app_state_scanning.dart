@@ -30,6 +30,7 @@ extension AppStateScanning on AppState {
     hasBackground = false;
     latestSpectrum = null;
     acquiredSpectra = const [];
+    manualBuffer = const [];
     latestAnalysisResults = const [];
     statusMessage = 'Disconnected';
     setTab(0);
@@ -38,6 +39,9 @@ extension AppStateScanning on AppState {
 
   Future<void> runBackground() async {
     if ((!isConnected && !testMode) || isBackgrounding || isScanning) return;
+    // Re-setting the reference starts a fresh capture: drop any half-finished
+    // manual session so its scans can't bleed into the next one.
+    manualBuffer = const [];
     if (!isConnected && testMode) {
       // Simulated reference capture.
       isBackgrounding = true;
@@ -102,10 +106,22 @@ extension AppStateScanning on AppState {
       return;
     }
     final scanTotal = targetScanCount < 1 ? 1 : targetScanCount;
+    // Continuous OFF + multi-scan => manual one-tap-per-scan stepping.
+    if (!continuousMode && scanTotal > 1) {
+      await _captureManualStep(scanTotal);
+    } else {
+      await _captureAuto(scanTotal);
+    }
+  }
+
+  /// Auto capture: take all [scanTotal] scans back-to-back (as fast as the
+  /// sensor responds) in a single tap. Can be stopped early.
+  Future<void> _captureAuto(int scanTotal) async {
     isScanning = true;
     stopScanRequested = false;
     currentScanIndex = 0;
     acquiredSpectra = const [];
+    manualBuffer = const [];
     final collected = <Spectrum>[];
     statusMessage = scanTotal == 1
         ? 'Scanning spectrum...'
@@ -122,53 +138,11 @@ extension AppStateScanning on AppState {
         final spectrum = await _acquireSpectrum();
         collected.add(spectrum);
         acquiredSpectra = List.unmodifiable(collected);
-        // Continuous-sweep mode: pause between scans so the operator can move
-        // the probe to a fresh spot. Skipped after the final scan / on stop.
-        if (continuousMode &&
-            !stopScanRequested &&
-            i < scanTotal - 1 &&
-            scanIntervalMs > 0) {
-          statusMessage = 'Move to next spot ($currentScanIndex/$scanTotal)...';
-          notifyUi();
-          // Wait in short slices so a stop tap is honored within ~50ms rather
-          // than after the full interval.
-          var waited = 0;
-          const sliceMs = 50;
-          while (waited < scanIntervalMs && !stopScanRequested) {
-            final remaining = scanIntervalMs - waited;
-            final slice = remaining < sliceMs ? remaining : sliceMs;
-            await Future<void>.delayed(Duration(milliseconds: slice));
-            waited += slice;
-          }
-        }
       }
-      if (collected.isEmpty) {
-        statusMessage = 'Scan cancelled';
-      } else {
-        final n = collected.length;
-        latestSpectrum = n == 1
-            ? collected.first
-            : averageSpectra(collected, method: averagingMethod);
-        _runSelectedModelAnalysis(notify: false);
-        statusMessage = n == 1
-            ? 'Ready to Scan'
-            : 'Captured $n scans (${averagingMethod.label})';
-        captureCount += 1;
-      }
+      _finalizeCapture(collected);
     } catch (error) {
       acquiredSpectra = const [];
-      final lost = await _handleConnectionLossIfNeeded(
-        error,
-        actionLabel: 'Spectrum',
-      );
-      if (!lost) {
-        if (_isLikelyMissingReferenceError(error)) {
-          _rememberReferenceForCurrentIp(false);
-          statusMessage = 'Reference required. Tap Set reference.';
-        } else {
-          statusMessage = 'Spectrum failed: $error';
-        }
-      }
+      await _handleScanError(error);
     } finally {
       isScanning = false;
       stopScanRequested = false;
@@ -177,8 +151,81 @@ extension AppStateScanning on AppState {
     notifyUi();
   }
 
-  /// Request that an in-progress continuous capture finish early. Whatever
-  /// scans have been collected so far are averaged and saved as usual.
+  /// Manual capture: take ONE scan per tap, accumulating until [scanTotal] are
+  /// collected, then average + finalize. Lets the operator reposition the probe
+  /// and press Scan again for each spot.
+  Future<void> _captureManualStep(int scanTotal) async {
+    isScanning = true;
+    final stepIndex = manualBuffer.length + 1;
+    currentScanIndex = stepIndex;
+    statusMessage = 'Scanning $stepIndex/$scanTotal...';
+    notifyUi();
+    try {
+      final spectrum = await _acquireSpectrum();
+      final collected = [...manualBuffer, spectrum];
+      if (collected.length >= scanTotal) {
+        manualBuffer = const [];
+        _finalizeCapture(collected);
+      } else {
+        manualBuffer = List.unmodifiable(collected);
+        acquiredSpectra = List.unmodifiable(collected);
+        statusMessage =
+            'Captured ${collected.length}/$scanTotal. Press Scan for the next.';
+      }
+    } catch (error) {
+      manualBuffer = const [];
+      acquiredSpectra = const [];
+      await _handleScanError(error);
+    } finally {
+      isScanning = false;
+      currentScanIndex = 0;
+    }
+    notifyUi();
+  }
+
+  /// Average the collected scans into latestSpectrum, run analysis, and count
+  /// the capture (so the Results screen opens). Empty input = cancelled.
+  void _finalizeCapture(List<Spectrum> collected) {
+    if (collected.isEmpty) {
+      statusMessage = 'Scan cancelled';
+      return;
+    }
+    final n = collected.length;
+    final combined = n == 1
+        ? collected.first
+        : averageSpectra(collected, method: averagingMethod);
+    if (combined == null) {
+      // Empty/malformed data: don't count the capture or open Results.
+      acquiredSpectra = const [];
+      statusMessage = 'Spectrum failed: empty data';
+      return;
+    }
+    acquiredSpectra = List.unmodifiable(collected);
+    latestSpectrum = combined;
+    _runSelectedModelAnalysis(notify: false);
+    statusMessage = n == 1
+        ? 'Ready to Scan'
+        : 'Captured $n scans (${averagingMethod.label})';
+    captureCount += 1;
+  }
+
+  Future<void> _handleScanError(Object error) async {
+    final lost = await _handleConnectionLossIfNeeded(
+      error,
+      actionLabel: 'Spectrum',
+    );
+    if (!lost) {
+      if (_isLikelyMissingReferenceError(error)) {
+        _rememberReferenceForCurrentIp(false);
+        statusMessage = 'Reference required. Tap Set reference.';
+      } else {
+        statusMessage = 'Spectrum failed: $error';
+      }
+    }
+  }
+
+  /// Request that an in-progress auto capture finish early. Whatever scans have
+  /// been collected so far are averaged and saved as usual.
   void requestStopScan() {
     if (!isScanning || stopScanRequested) return;
     stopScanRequested = true;
@@ -336,6 +383,7 @@ extension AppStateScanning on AppState {
   void discardLatest() {
     latestSpectrum = null;
     acquiredSpectra = const [];
+    manualBuffer = const [];
     latestAnalysisResults = const [];
     statusMessage = 'Scan discarded';
     notifyUi();
@@ -344,7 +392,7 @@ extension AppStateScanning on AppState {
   Future<void> loadPersistedReferenceState() async {
     try {
       final saved = await dataStore.listReferenceReadyEntries();
-      // Drop entries older than 2× the current max-age window — anything
+      // Drop entries older than 2× the current max-age window - anything
       // beyond that won't be reusable for any plausible threshold setting
       // and just clutters the table.
       final cutoff = DateTime.now().subtract(referenceMaxAge * 2);
@@ -385,6 +433,7 @@ extension AppStateScanning on AppState {
     isConnected = false;
     isConnecting = false;
     isVerifyingConnection = false;
+    manualBuffer = const [];
     _syncReferenceFromCurrentIp();
     showConnectScreen = true;
     statusMessage = '$actionLabel failed: connection lost. Please reconnect.';
@@ -423,7 +472,7 @@ extension AppStateScanning on AppState {
 
   void _syncReferenceFromCurrentIp() {
     // In test mode the simulated reference is managed by runBackground /
-    // exitTestMode, not by IP freshness — never let an IP change clobber it.
+    // exitTestMode, not by IP freshness - never let an IP change clobber it.
     if (testMode) return;
     final ip = currentIp.trim();
     if (ip.isEmpty) {

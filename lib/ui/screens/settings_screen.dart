@@ -23,33 +23,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, state, _) {
+        // Smaller, muted description text for every section subtitle / switch
+        // tile in Settings (resolved by the ListTiles below this Theme).
         return SafeArea(
           bottom: true,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 140),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              listTileTheme: Theme.of(context).listTileTheme.copyWith(
+                    subtitleTextStyle: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          height: 1.25,
+                        ),
+                  ),
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 140),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 Text(
                   t('config.title'),
                   style: Theme.of(context).textTheme.headlineMedium,
                 ),
                 const SizedBox(height: 16),
 
-                _sectionLabel(context, t('config.general')),
-                _generalCard(context, state),
+                // User-facing scan controls come first; Advanced (don't-touch)
+                // and General (rarely changed) sit below. All collapsible.
+                _scanSection(context, state),
                 const SizedBox(height: 12),
-                _displayCard(context, state),
-
-                const SizedBox(height: 24),
-
-                _sectionLabel(context, t('config.models')),
-                _modelsCard(context, state),
-
-                const SizedBox(height: 24),
-
-                _sectionLabel(context, t('config.advanced')),
+                _modelsSection(context, state),
+                const SizedBox(height: 12),
                 _advancedCard(context, state),
+                const SizedBox(height: 12),
+                _generalSection(context, state),
 
                 const SizedBox(height: 24),
 
@@ -68,7 +77,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 _sectionLabel(context, t('config.about')),
                 _aboutCard(context),
-              ],
+                ],
+              ),
             ),
           ),
         );
@@ -90,138 +100,207 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // General cards
+  // Scan section (user-facing capture controls)
   // ─────────────────────────────────────────────────────────────────
 
-  Widget _generalCard(BuildContext context, AppState state) {
+  Widget _scanSection(BuildContext context, AppState state) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _dropdownField<ThemeMode>(
-              context: context,
-              label: t('config.theme'),
-              value: state.themeMode,
-              items: [
-                DropdownMenuItem(
-                  value: ThemeMode.light,
-                  child: Text(t('config.themeLight')),
-                ),
-                DropdownMenuItem(
-                  value: ThemeMode.dark,
-                  child: Text(t('config.themeDark')),
-                ),
-              ],
-              onChanged: (value) {
-                if (value == null) return;
-                state.setThemeMode(value);
-              },
-            ),
-            _dropdownField<String>(
-              context: context,
-              label: t('config.language'),
-              value: state.locale,
-              items: const [
-                DropdownMenuItem(value: AppLocale.en, child: Text('English')),
-                DropdownMenuItem(value: AppLocale.ko, child: Text('한국어')),
-              ],
-              onChanged: (value) {
-                if (value == null) return;
-                state.setLocale(value);
-              },
-            ),
-          ],
-        ),
+      child: ExpansionTile(
+        title: Text(t('config.scanSettings')),
+        subtitle: Text(t('config.scanSettingsSub')),
+        childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        children: [
+          const SizedBox(height: 6),
+          _sliderField(
+            context: context,
+            label: t('config.scansPerCapture'),
+            value: state.targetScanCount.toDouble(),
+            min: 1,
+            max: 20,
+            valueLabel: '${state.targetScanCount}',
+            onChanged: (v) => state.updateTargetScanCount(v.round()),
+          ),
+          _dropdownField<AveragingMethod>(
+            context: context,
+            label: t('config.combineMethod'),
+            value: state.averagingMethod,
+            items: AveragingMethod.values
+                .map((m) => DropdownMenuItem(value: m, child: Text(m.label)))
+                .toList(),
+            onChanged: (value) {
+              if (value == null) return;
+              state.updateAveragingMethod(value);
+            },
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: state.continuousMode,
+            onChanged: state.updateContinuousMode,
+            title: Text(t('config.continuousMode')),
+            subtitle: Text(t('config.continuousModeSubtitle')),
+          ),
+          _dropdownField<Duration>(
+            context: context,
+            label: t('config.referenceExpire'),
+            value: state.referenceMaxAge,
+            items: [
+              DropdownMenuItem(
+                value: const Duration(minutes: 30),
+                child: Text(t('config.expire30min')),
+              ),
+              DropdownMenuItem(
+                value: const Duration(hours: 1),
+                child: Text(t('config.expire1h')),
+              ),
+              DropdownMenuItem(
+                value: const Duration(hours: 2),
+                child: Text(t('config.expire2h')),
+              ),
+              DropdownMenuItem(
+                value: const Duration(hours: 4),
+                child: Text(t('config.expire4h')),
+              ),
+              DropdownMenuItem(
+                value: const Duration(hours: 8),
+                child: Text(t('config.expire8h')),
+              ),
+            ],
+            onChanged: (value) {
+              if (value == null) return;
+              state.updateReferenceMaxAge(value);
+            },
+          ),
+        ],
       ),
     );
   }
 
-  Widget _displayCard(BuildContext context, AppState state) {
+  Widget _generalSection(BuildContext context, AppState state) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _dropdownField<String>(
-              context: context,
-              label: t('config.axisUnit'),
-              value: state.spectrumAxisUnit,
-              items: const [
-                DropdownMenuItem(value: 'DN', child: Text('DN')),
-                DropdownMenuItem(value: 'cm^-1', child: Text('cm⁻¹')),
-                DropdownMenuItem(value: 'nm', child: Text('nm')),
-              ],
-              onChanged: (value) {
-                if (value == null) return;
-                state.updateSpectrumAxisUnit(value);
-              },
+      child: ExpansionTile(
+        title: Text(t('config.general')),
+        subtitle: Text(t('config.generalSubtitle')),
+        childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+        children: [
+          const SizedBox(height: 6),
+          _dropdownField<ThemeMode>(
+            context: context,
+            label: t('config.theme'),
+            value: state.themeMode,
+            items: [
+              DropdownMenuItem(
+                value: ThemeMode.light,
+                child: Text(t('config.themeLight')),
+              ),
+              DropdownMenuItem(
+                value: ThemeMode.dark,
+                child: Text(t('config.themeDark')),
+              ),
+            ],
+            onChanged: (value) {
+              if (value == null) return;
+              state.setThemeMode(value);
+            },
+          ),
+          _dropdownField<String>(
+            context: context,
+            label: t('config.language'),
+            value: state.locale,
+            items: const [
+              DropdownMenuItem(value: AppLocale.en, child: Text('English')),
+              DropdownMenuItem(value: AppLocale.ko, child: Text('한국어')),
+            ],
+            onChanged: (value) {
+              if (value == null) return;
+              state.setLocale(value);
+            },
+          ),
+          _dropdownField<String>(
+            context: context,
+            label: t('config.axisUnit'),
+            value: state.spectrumAxisUnit,
+            items: const [
+              DropdownMenuItem(value: 'DN', child: Text('DN')),
+              DropdownMenuItem(value: 'cm^-1', child: Text('cm⁻¹')),
+              DropdownMenuItem(value: 'nm', child: Text('nm')),
+            ],
+            onChanged: (value) {
+              if (value == null) return;
+              state.updateSpectrumAxisUnit(value);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// GH/NH diagnostics toggle + threshold overrides (shown inside the Models
+  /// section since the diagnostics are a per-model property).
+  Widget _ghNhControls(BuildContext context, AppState state) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: state.showGhNhDiagnostics,
+          onChanged: state.updateShowGhNhDiagnostics,
+          title: Text(t('config.showDiagnostics')),
+          subtitle: Text(t('config.showDiagnosticsSubtitle')),
+        ),
+        if (state.showGhNhDiagnostics) ...[
+          const SizedBox(height: 4),
+          _subHeader(context, t('config.thresholds')),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Text(
+              t('config.thresholdsHint'),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
             ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: state.showGhNhDiagnostics,
-              onChanged: state.updateShowGhNhDiagnostics,
-              title: Text(t('config.showDiagnostics')),
-              subtitle: Text(t('config.showDiagnosticsSubtitle')),
-            ),
-            if (state.showGhNhDiagnostics) ...[
-              const SizedBox(height: 4),
-              _subHeader(context, t('config.thresholds')),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Text(
-                  t('config.thresholdsHint'),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: _ThresholdField(
+                  label: t('config.ghWarning'),
+                  value: state.ghWarningThreshold,
+                  onChanged: state.updateGhWarningThreshold,
                 ),
               ),
-              Row(
-                children: [
-                  Expanded(
-                    child: _ThresholdField(
-                      label: t('config.ghWarning'),
-                      value: state.ghWarningThreshold,
-                      onChanged: state.updateGhWarningThreshold,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _ThresholdField(
-                      label: t('config.ghOutlier'),
-                      value: state.ghOutlierThreshold,
-                      onChanged: state.updateGhOutlierThreshold,
-                    ),
-                  ),
-                ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: _ThresholdField(
+                  label: t('config.ghOutlier'),
+                  value: state.ghOutlierThreshold,
+                  onChanged: state.updateGhOutlierThreshold,
+                ),
               ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _ThresholdField(
-                      label: t('config.nhWarning'),
-                      value: state.nhWarningThreshold,
-                      onChanged: state.updateNhWarningThreshold,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _ThresholdField(
-                      label: t('config.nhOutlier'),
-                      value: state.nhOutlierThreshold,
-                      onChanged: state.updateNhOutlierThreshold,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
             ],
-          ],
-        ),
-      ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _ThresholdField(
+                  label: t('config.nhWarning'),
+                  value: state.nhWarningThreshold,
+                  onChanged: state.updateNhWarningThreshold,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _ThresholdField(
+                  label: t('config.nhOutlier'),
+                  value: state.nhOutlierThreshold,
+                  onChanged: state.updateNhOutlierThreshold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+      ],
     );
   }
 
@@ -244,47 +323,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // Models card — toggle which models the Scan flow runs, expand each
+  // Models card - toggle which models the Scan flow runs, expand each
   // row to see algorithm + CV metrics + dataset info.
   // ─────────────────────────────────────────────────────────────────
 
-  Widget _modelsCard(BuildContext context, AppState state) {
+  Widget _modelsSection(BuildContext context, AppState state) {
     final models = state.availableModels;
-    if (models.isEmpty) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            t('config.modelsNone'),
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-        ),
-      );
-    }
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Column(
-          children: [
+      child: ExpansionTile(
+        title: Text(t('config.models')),
+        subtitle: Text(t('config.modelsSubtitle')),
+        childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+        children: [
+          if (models.isEmpty)
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, 10, 8, 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      t('config.modelsHint'),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                t('config.modelsNone'),
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            )
+          else ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+              child: Text(
+                t('config.modelsHint'),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
-                  ),
-                ],
               ),
             ),
             const Divider(height: 1),
             ...models.map((m) => _modelRow(context, state, m)),
           ],
-        ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: _ghNhControls(context, state),
+          ),
+        ],
       ),
     );
   }
@@ -392,7 +469,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ));
     }
 
-    addRow(t('config.rowAlgorithm'), m.algorithm.isEmpty ? '—' : m.algorithm);
+    addRow(t('config.rowAlgorithm'), m.algorithm.isEmpty ? '-' : m.algorithm);
     addRow(t('config.rowClasses'),
         m.classes.isEmpty ? null : m.classes.join(', '));
     addRow(m.metricPrimaryLabel ?? '', m.metricPrimaryValue,
@@ -440,85 +517,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _advancedCard(BuildContext context, AppState state) {
     return Card(
       child: ExpansionTile(
-        title: Text(t('config.measurementSettings')),
-        subtitle: Text(t('config.measurementSubtitle')),
+        title: Text(t('config.advanced')),
+        subtitle: Text(t('config.advancedSubtitle')),
         childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
         children: [
           const SizedBox(height: 6),
-          _subHeader(context, t('config.capture')),
-          _sliderField(
-            context: context,
-            label: t('config.scansPerCapture'),
-            value: state.targetScanCount.toDouble(),
-            min: 1,
-            max: 20,
-            valueLabel: '${state.targetScanCount}',
-            onChanged: (v) => state.updateTargetScanCount(v.round()),
-          ),
-          _dropdownField<AveragingMethod>(
-            context: context,
-            label: t('config.combineMethod'),
-            value: state.averagingMethod,
-            items: AveragingMethod.values
-                .map(
-                  (m) => DropdownMenuItem(value: m, child: Text(m.label)),
-                )
-                .toList(),
-            onChanged: (value) {
-              if (value == null) return;
-              state.updateAveragingMethod(value);
-            },
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: state.continuousMode,
-            onChanged: state.updateContinuousMode,
-            title: Text(t('config.continuousMode')),
-            subtitle: Text(t('config.continuousModeSubtitle')),
-          ),
-          if (state.continuousMode)
-            _sliderField(
-              context: context,
-              label: t('config.scanInterval'),
-              value: state.scanIntervalMs.toDouble(),
-              min: 100,
-              max: 3000,
-              valueLabel: '${state.scanIntervalMs} ms',
-              onChanged: (v) => state.updateScanIntervalMs(v.round()),
-            ),
-          _dropdownField<Duration>(
-            context: context,
-            label: t('config.referenceExpire'),
-            value: state.referenceMaxAge,
-            items: [
-              DropdownMenuItem(
-                value: const Duration(minutes: 30),
-                child: Text(t('config.expire30min')),
-              ),
-              DropdownMenuItem(
-                value: const Duration(hours: 1),
-                child: Text(t('config.expire1h')),
-              ),
-              DropdownMenuItem(
-                value: const Duration(hours: 2),
-                child: Text(t('config.expire2h')),
-              ),
-              DropdownMenuItem(
-                value: const Duration(hours: 4),
-                child: Text(t('config.expire4h')),
-              ),
-              DropdownMenuItem(
-                value: const Duration(hours: 8),
-                child: Text(t('config.expire8h')),
-              ),
-            ],
-            onChanged: (value) {
-              if (value == null) return;
-              state.updateReferenceMaxAge(value);
-            },
-          ),
-
-          const SizedBox(height: 8),
           _subHeader(context, t('config.scanParams')),
           _sliderField(
             context: context,
@@ -703,11 +706,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _aboutCard(BuildContext context) {
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     final ink = Theme.of(context).colorScheme.onSurface;
+    final small = Theme.of(context).textTheme.bodySmall;
+    // Calm hierarchy: one bold title, then consistent small lines (the name
+    // slightly inked, the rest muted) so the weights don't fight each other.
     return Card(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
-        // Force the card to span the full width like every other settings card
-        // (its text content alone would otherwise shrink it to the left).
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -716,40 +720,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'Forespectra',
               style: Theme.of(context).textTheme.titleMedium,
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Text(
-              'Developed by',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: muted,
-              ),
+              'Developed by Heechan Jeong',
+              style: small?.copyWith(color: ink),
             ),
             const SizedBox(height: 2),
             Text(
-              'Heechan Jeong',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: ink,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'Advanced Forestry Systems Lab',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: muted,
-              ),
-            ),
-            Text(
-              'Oregon State University',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: muted,
-              ),
+              'Advanced Forestry Systems Lab, Oregon State University',
+              style: small?.copyWith(color: muted, height: 1.35),
             ),
             const SizedBox(height: 10),
             Text(
               '© 2026 Heechan Jeong. All rights reserved.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: muted,
-              ),
+              style: small?.copyWith(color: muted),
             ),
           ],
         ),

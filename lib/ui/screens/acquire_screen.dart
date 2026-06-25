@@ -44,7 +44,7 @@ class _AcquireScreenState extends State<AcquireScreen> {
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, state, _) {
-        // Don't overwrite while the user is typing — batch-mode sample
+        // Don't overwrite while the user is typing - batch-mode sample
         // bumps come through here too and would jump the caret otherwise.
         if (!_sampleFocus.hasFocus &&
             _sampleController.text != state.sampleName) {
@@ -184,6 +184,11 @@ class _AcquireScreenState extends State<AcquireScreen> {
     );
 
     final canStopScan = state.isScanning && state.continuousMode;
+    // Manual stepping (continuous off, multi-scan) mid-session: prompt the
+    // next press, e.g. "SCAN 2/5".
+    final manualActive = !state.continuousMode &&
+        state.targetScanCount > 1 &&
+        state.manualBuffer.isNotEmpty;
     final middleSection = Column(
       children: [
         Center(
@@ -239,7 +244,9 @@ class _AcquireScreenState extends State<AcquireScreen> {
                                 : (state.targetScanCount > 1
                                     ? '${state.currentScanIndex}/${state.targetScanCount}'
                                     : t('scan.scanning')))
-                            : t('scan.scan'),
+                            : (manualActive
+                                ? '${t('scan.scan')} ${state.manualBuffer.length + 1}/${state.targetScanCount}'
+                                : t('scan.scan')),
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           letterSpacing: 1.2,
                           color: canCapture ? Colors.white : null,
@@ -403,12 +410,12 @@ class _AcquireScreenState extends State<AcquireScreen> {
   String _modelButtonLabel(AppState state) {
     final n = state.selectedModels.length;
     if (n == 0) {
-      return '${t('scan.analysisModels')} — ${t('scan.modelNoneSelected')}';
+      return '${t('scan.analysisModels')}: ${t('scan.modelNoneSelected')}';
     }
     if (n == 1) {
-      return '${t('scan.analysisModel')} — ${state.selectedModels.first.name}';
+      return '${t('scan.analysisModel')}: ${state.selectedModels.first.name}';
     }
-    return '${t('scan.analysisModels')} — $n ${t('scan.modelSelectedSuffix')}';
+    return '${t('scan.analysisModels')}: $n ${t('scan.modelSelectedSuffix')}';
   }
 
   /// Lightweight per-scan model toggle. Full details (algorithm, metrics,

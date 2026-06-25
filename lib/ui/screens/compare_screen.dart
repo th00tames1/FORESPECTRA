@@ -249,7 +249,7 @@ class _CompareScreenState extends State<CompareScreen> {
                 (t) => Padding(
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Text(
-                    '${_traceLabel(t)} — ${t.measurement.timestamp}',
+                    '${_traceLabel(t)},  ${t.measurement.timestamp}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),

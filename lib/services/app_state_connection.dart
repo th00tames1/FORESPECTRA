@@ -15,7 +15,7 @@ extension AppStateConnection on AppState {
     try {
       await dataStore.clearDevices();
     } catch (_) {
-      // Best-effort wipe — fall through to in-memory cleanup regardless.
+      // Best-effort wipe - fall through to in-memory cleanup regardless.
     }
     _recentIps = const [];
     discoveredSensors = const [];
@@ -42,6 +42,7 @@ extension AppStateConnection on AppState {
     isVerifyingConnection = false;
     isBackgrounding = false;
     isScanning = false;
+    manualBuffer = const [];
     _syncReferenceFromCurrentIp();
     showConnectScreen = true;
     statusMessage = 'Paused. Reconnecting when app resumes...';
@@ -197,6 +198,7 @@ extension AppStateConnection on AppState {
     _syncReferenceFromCurrentIp();
     isBackgrounding = false;
     isScanning = false;
+    manualBuffer = const [];
     showConnectScreen = true;
     setTab(0);
     statusMessage = 'Disconnected';
@@ -260,7 +262,7 @@ extension AppStateConnection on AppState {
     notifyUi();
 
     try {
-      // Kick mDNS off in parallel with the subnet sweep — until the firmware
+      // Kick mDNS off in parallel with the subnet sweep - until the firmware
       // advertises, this never resolves anything, so we don't block on it.
       // Once it returns empty/throws, skip it for the rest of the session.
       final mdnsFuture = _mdnsAvailable
@@ -469,7 +471,7 @@ extension AppStateConnection on AppState {
         includeLoopback: false,
         type: InternetAddressType.IPv4,
       );
-      // Exclude cellular/PPP interfaces — we only want Wi-Fi / Wi-Fi tether / USB tether.
+      // Exclude cellular/PPP interfaces - we only want Wi-Fi / Wi-Fi tether / USB tether.
       final cellularPattern = RegExp(
         r'(rmnet|ccmni|pdp_ip|ppp|cellular)',
         caseSensitive: false,

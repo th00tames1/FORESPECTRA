@@ -5,7 +5,7 @@ import 'package:multicast_dns/multicast_dns.dart';
 ///
 /// REQUIRES SENSOR FIRMWARE SUPPORT: the sensor must advertise itself
 /// using a Bonjour/mDNS service. With NeoSpectra-class firmware this is
-/// typically not enabled by default — coordinate with the sensor vendor
+/// typically not enabled by default - coordinate with the sensor vendor
 /// or firmware owner.
 ///
 /// Expected advertisement (example): `_sinir._tcp.local`. Adjust the

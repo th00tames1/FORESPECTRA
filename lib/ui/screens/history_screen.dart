@@ -663,7 +663,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Future<void> _shareCsv(String path) async {
     try {
       // Some receiver apps (especially messengers like KakaoTalk/LINE) ignore
-      // the file attachment when EXTRA_TEXT is present — they treat the share
+      // the file attachment when EXTRA_TEXT is present - they treat the share
       // as a text-only message. Send only the file with an explicit MIME type
       // so Drive/Files/Gmail etc. all consistently get the attachment.
       await Share.shareXFiles(
@@ -1187,7 +1187,7 @@ class _HistoryAnalysis {
         ? displayRaw
         : numericValue != null
         ? _formatNumeric(numericValue, units)
-        : (fallbackRaw.isNotEmpty ? fallbackRaw : '—');
+        : (fallbackRaw.isNotEmpty ? fallbackRaw : '-');
 
     final primaryValue = numericValue != null
         ? numericValue.toStringAsFixed(2)

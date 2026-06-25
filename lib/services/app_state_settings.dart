@@ -67,8 +67,6 @@ extension AppStateSettings on AppState {
       readInt(SettingsKeys.referenceMaxAgeMin,
           (v) => referenceMaxAge = Duration(minutes: v));
       readBool(SettingsKeys.continuousMode, (v) => continuousMode = v);
-      readInt(SettingsKeys.scanIntervalMs,
-          (v) => scanIntervalMs = _clampInterval(v));
 
       readInt(SettingsKeys.lampsCount, (v) => lampsCount = v);
       readInt(SettingsKeys.lampSelect, (v) => lampSelect = v);
@@ -87,7 +85,7 @@ extension AppStateSettings on AppState {
     unawaited(dataStore.writeSetting(key, value));
   }
 
-  /// Assign an int field, persist it, and notify — collapses the dozens of
+  /// Assign an int field, persist it, and notify - collapses the dozens of
   /// near-identical `update*` setters below.
   void _setInt(String key, int value, void Function(int) assign) {
     assign(value);
@@ -107,25 +105,10 @@ extension AppStateSettings on AppState {
     notifyUi();
   }
 
-  static const int _minScanIntervalMs = 100;
-  static const int _maxScanIntervalMs = 3000;
-
-  int _clampInterval(int v) => v < _minScanIntervalMs
-      ? _minScanIntervalMs
-      : (v > _maxScanIntervalMs ? _maxScanIntervalMs : v);
-
   void updateContinuousMode(bool value) {
     if (value == continuousMode) return;
     continuousMode = value;
     _persist(SettingsKeys.continuousMode, '$value');
-    notifyUi();
-  }
-
-  void updateScanIntervalMs(int value) {
-    final clamped = _clampInterval(value);
-    if (clamped == scanIntervalMs) return;
-    scanIntervalMs = clamped;
-    _persist(SettingsKeys.scanIntervalMs, '$clamped');
     notifyUi();
   }
 
@@ -217,7 +200,7 @@ extension AppStateSettings on AppState {
   }
 
   /// Restore all user-tunable settings to their built-in defaults.
-  /// Does not touch saved sensors, history, or models — only preferences.
+  /// Does not touch saved sensors, history, or models - only preferences.
   Future<void> resetSettings() async {
     themeMode = ThemeMode.light;
     showGhNhDiagnostics = false;
@@ -235,7 +218,6 @@ extension AppStateSettings on AppState {
     averagingMethod = AveragingMethod.mean;
     referenceMaxAge = const Duration(hours: 1);
     continuousMode = false;
-    scanIntervalMs = 400;
 
     lampsCount = 2;
     lampSelect = 0;
