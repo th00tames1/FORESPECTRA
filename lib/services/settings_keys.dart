@@ -22,6 +22,7 @@ class SettingsKeys {
 
   static const targetScanCount = 'targetScanCount';
   static const averagingMethod = 'averagingMethod';
+  static const trimDropCount = 'trimDropCount';
   static const referenceMaxAgeMin = 'referenceMaxAgeMin';
   static const continuousMode = 'continuousMode';
 

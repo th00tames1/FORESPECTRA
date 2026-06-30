@@ -49,10 +49,11 @@ class _CompareScreenState extends State<CompareScreen> {
         (b) => b.kind == 'raw',
         orElse: () => blobs.first,
       );
+      final spectrum = blob.toSpectrum();
       results.add(_TraceData(
         measurement: measurements[i],
-        x: blob.xBytes.buffer.asFloat64List(),
-        y: blob.yBytes.buffer.asFloat64List(),
+        x: spectrum.x,
+        y: spectrum.y,
       ));
     }
     return results;

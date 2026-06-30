@@ -64,8 +64,10 @@ extension AppStateSettings on AppState {
       readInt(SettingsKeys.targetScanCount, (v) => targetScanCount = v);
       readString(SettingsKeys.averagingMethod,
           (v) => averagingMethod = AveragingMethodLabel.fromId(v));
+      readInt(SettingsKeys.trimDropCount,
+          (v) => trimDropCount = _clampTrimDrop(v));
       readInt(SettingsKeys.referenceMaxAgeMin,
-          (v) => referenceMaxAge = Duration(minutes: v));
+          (v) => referenceMaxAge = Duration(minutes: v < 1 ? 1 : v));
       readBool(SettingsKeys.continuousMode, (v) => continuousMode = v);
 
       readInt(SettingsKeys.lampsCount, (v) => lampsCount = v);
@@ -112,16 +114,27 @@ extension AppStateSettings on AppState {
     notifyUi();
   }
 
+  // Max scans is 20, so at most 18 can be dropped while keeping 2 to average.
+  int _clampTrimDrop(int v) => v < 0 ? 0 : (v > 18 ? 18 : v);
+
   void updateAveragingMethod(AveragingMethod method) {
     if (method == averagingMethod) {
       return;
     }
     averagingMethod = method;
-    if (acquiredSpectra.length > 1) {
-      latestSpectrum = averageSpectra(acquiredSpectra, method: averagingMethod);
-      _runSelectedModelAnalysis(notify: false);
-    }
+    recomputeCombine();
     _persist(SettingsKeys.averagingMethod, method.id);
+    notifyUi();
+  }
+
+  void updateTrimDropCount(int value) {
+    final clamped = _clampTrimDrop(value);
+    if (clamped == trimDropCount) return;
+    trimDropCount = clamped;
+    if (averagingMethod == AveragingMethod.trimmedMean) {
+      recomputeCombine();
+    }
+    _persist(SettingsKeys.trimDropCount, '$clamped');
     notifyUi();
   }
 
@@ -216,6 +229,7 @@ extension AppStateSettings on AppState {
     scanParams = ScanParams();
     targetScanCount = 1;
     averagingMethod = AveragingMethod.mean;
+    trimDropCount = 2;
     referenceMaxAge = const Duration(hours: 1);
     continuousMode = false;
 
@@ -229,14 +243,21 @@ extension AppStateSettings on AppState {
     opticalGainValue = 0;
 
     _syncReferenceFromCurrentIp();
-    // Re-run analysis so cached GH/NH levels reflect the cleared overrides
-    // (the live threshold setters do this via _setThreshold; reset must too).
-    _runSelectedModelAnalysis(notify: false);
+    // Re-derive the averaged spectrum + dropped scans for the reset combine
+    // method, and refresh cached GH/NH levels for the cleared overrides.
+    recomputeCombine();
+    if (acquiredSpectra.length <= 1) {
+      _runSelectedModelAnalysis(notify: false);
+    }
     try {
       await dataStore.clearAllSettings();
     } catch (_) {
       // Best-effort; in-memory state is already reset.
     }
+    // clearAllSettings wiped onboardingSeen/locale too, but reset deliberately
+    // keeps those in memory; re-persist them so they survive the next launch.
+    _persist(SettingsKeys.onboardingSeen, '$onboardingSeen');
+    _persist(SettingsKeys.locale, locale);
     notifyUi();
   }
 

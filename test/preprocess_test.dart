@@ -142,6 +142,44 @@ void main() {
         returnsNormally,
       );
     });
+
+    test('reproduces a degree-2 polynomial exactly at the edges (interp mode)',
+        () {
+      // A quadratic lies in the polyorder-2 fit space, so scipy mode='interp'
+      // reproduces it EXACTLY everywhere - including the first/last `half`
+      // channels. Reflect padding does not, so this pins the boundary fix.
+      double poly(int i) => 0.5 * i * i - 2.0 * i + 3.0;
+      final x = List.generate(21, (i) => i.toDouble());
+      final y = List.generate(21, (i) => poly(i));
+      final out = savitzkyGolay(
+        _spec(x, y),
+        windowLength: 11,
+        polyorder: 2,
+        derivativeOrder: 0,
+      );
+      for (var i = 0; i < out.length; i++) {
+        expect((out.y[i] - poly(i)).abs(), lessThan(1e-6),
+            reason: 'edge/interior smoothing diverged at index $i');
+      }
+    });
+
+    test('first derivative of a quadratic is exact at the edges (interp mode)',
+        () {
+      // d/di (0.5 i^2 - 2 i + 3) = i - 2, with unit sample spacing.
+      double dpoly(int i) => i - 2.0;
+      final x = List.generate(21, (i) => i.toDouble());
+      final y = List.generate(21, (i) => 0.5 * i * i - 2.0 * i + 3.0);
+      final out = savitzkyGolay(
+        _spec(x, y),
+        windowLength: 11,
+        polyorder: 2,
+        derivativeOrder: 1,
+      );
+      for (var i = 0; i < out.length; i++) {
+        expect((out.y[i] - dpoly(i)).abs(), lessThan(1e-6),
+            reason: 'edge/interior derivative diverged at index $i');
+      }
+    });
   });
 
   group('applyPreprocessing', () {

@@ -69,7 +69,7 @@ Spectrum savitzkyGolay(
   if (window > spectrum.length) {
     window = spectrum.length.isOdd ? spectrum.length : spectrum.length - 1;
   }
-  if (window < 3 || window <= polyorder) {
+  if (window < 3 || polyorder < 1 || window <= polyorder) {
     return spectrum;
   }
 
@@ -77,19 +77,51 @@ Spectrum savitzkyGolay(
       ? 0
       : (derivativeOrder > polyorder ? polyorder : derivativeOrder);
 
-  final coeffs = _savgolCoefficients(
+  final centerCoeffs = _savgolCoefficients(
     windowLength: window,
     polyorder: polyorder,
     derivativeOrder: safeDerivative,
   );
   final half = window ~/ 2;
+  final n = spectrum.length;
 
-  final out = Float64List(spectrum.length);
-  for (var i = 0; i < spectrum.length; i++) {
+  // Match scipy.signal.savgol_filter's default mode='interp' (used by the
+  // trained pipeline): the interior uses the centered kernel, while the first
+  // and last `half` samples evaluate the boundary-window polynomial fit at
+  // their actual offset instead of reflect-padding the signal. Reflect padding
+  // silently diverges from the training pipeline on the edge channels, which
+  // then propagate through the global SNV and into the prediction.
+  final out = Float64List(n);
+  for (var i = 0; i < n; i++) {
     var sum = 0.0;
-    for (var j = 0; j < window; j++) {
-      final sourceIndex = _reflectIndex(i + j - half, spectrum.length);
-      sum += coeffs[j] * spectrum.y[sourceIndex];
+    if (i < half) {
+      // Fit over the first `window` samples; evaluate at position i.
+      final coeffs = _savgolCoeffsForOffset(
+        windowLength: window,
+        polyorder: polyorder,
+        derivativeOrder: safeDerivative,
+        offset: (i - half).toDouble(),
+      );
+      for (var j = 0; j < window; j++) {
+        sum += coeffs[j] * spectrum.y[j];
+      }
+    } else if (i >= n - half) {
+      // Fit over the last `window` samples; evaluate at position i.
+      final start = n - window;
+      final coeffs = _savgolCoeffsForOffset(
+        windowLength: window,
+        polyorder: polyorder,
+        derivativeOrder: safeDerivative,
+        offset: (i - start - half).toDouble(),
+      );
+      for (var j = 0; j < window; j++) {
+        sum += coeffs[j] * spectrum.y[start + j];
+      }
+    } else {
+      // Interior: centered convolution (offset 0), unchanged.
+      for (var j = 0; j < window; j++) {
+        sum += centerCoeffs[j] * spectrum.y[i - half + j];
+      }
     }
     out[i] = sum;
   }
@@ -115,6 +147,9 @@ Spectrum smoothMovingAverage(Spectrum spectrum, int window) {
 }
 
 Spectrum standardNormalVariate(Spectrum spectrum) {
+  if (spectrum.length == 0) {
+    return spectrum;
+  }
   final mean = spectrum.y.reduce((a, b) => a + b) / spectrum.length;
   var variance = 0.0;
   for (final value in spectrum.y) {
@@ -134,6 +169,9 @@ Spectrum baselineCorrect(Spectrum spectrum) {
   }
   final x0 = spectrum.x.first;
   final x1 = spectrum.x.last;
+  if (x1 == x0) {
+    return spectrum;
+  }
   final y0 = spectrum.y.first;
   final y1 = spectrum.y.last;
   final slope = (y1 - y0) / (x1 - x0);
@@ -149,6 +187,10 @@ Spectrum baselineCorrect(Spectrum spectrum) {
 Spectrum derivative(Spectrum spectrum, {int order = 1}) {
   var current = spectrum;
   for (var k = 0; k < order; k++) {
+    if (current.length < 3) {
+      // A central difference needs both neighbors; too few points to apply.
+      break;
+    }
     final y = Float64List(current.length);
     for (var i = 1; i < current.length - 1; i++) {
       final dx = current.x[i + 1] - current.x[i - 1];
@@ -161,27 +203,31 @@ Spectrum derivative(Spectrum spectrum, {int order = 1}) {
   return current;
 }
 
-int _reflectIndex(int index, int length) {
-  if (length <= 1) {
-    return 0;
-  }
-  var i = index;
-  while (i < 0 || i >= length) {
-    if (i < 0) {
-      i = -i - 1;
-    } else {
-      i = (2 * length) - i - 1;
-    }
-  }
-  return i;
-}
-
 List<double> _savgolCoefficients({
   required int windowLength,
   required int polyorder,
   required int derivativeOrder,
 }) {
-  final cacheKey = '$windowLength|$polyorder|$derivativeOrder';
+  // Centered kernel (evaluate the fit at the window centre).
+  return _savgolCoeffsForOffset(
+    windowLength: windowLength,
+    polyorder: polyorder,
+    derivativeOrder: derivativeOrder,
+    offset: 0.0,
+  );
+}
+
+/// Savitzky-Golay convolution weights that evaluate the `derivativeOrder`-th
+/// derivative of the least-squares polynomial fit at position `offset`,
+/// measured from the window centre (offset 0 == centred kernel). Edge points
+/// use a non-zero offset, reproducing scipy's mode='interp' boundary handling.
+List<double> _savgolCoeffsForOffset({
+  required int windowLength,
+  required int polyorder,
+  required int derivativeOrder,
+  required double offset,
+}) {
+  final cacheKey = '$windowLength|$polyorder|$derivativeOrder|$offset';
   final cached = _sgCoeffCache[cacheKey];
   if (cached != null) {
     return cached;
@@ -209,14 +255,36 @@ List<double> _savgolCoefficients({
   }
 
   final invAta = _invertMatrix(ata);
-  final factorial = _factorial(derivativeOrder).toDouble();
+
+  // Weight of the m-th polynomial term in the derivativeOrder-th derivative
+  // evaluated at `offset`:  d^d/dk^d (k^m) |_{k=offset}
+  //   = m!/(m-d)! * offset^(m-d)   for m >= d, else 0.
+  final dWeights = List<double>.filled(cols, 0);
+  for (var m = derivativeOrder; m < cols; m++) {
+    var falling = 1.0;
+    for (var s = 0; s < derivativeOrder; s++) {
+      falling *= (m - s);
+    }
+    final exponent = m - derivativeOrder;
+    final powTerm = exponent == 0 ? 1.0 : pow(offset, exponent).toDouble();
+    dWeights[m] = falling * powTerm;
+  }
+
   final coeff = List<double>.filled(rows, 0);
   for (var r = 0; r < rows; r++) {
     var value = 0.0;
-    for (var j = 0; j < cols; j++) {
-      value += invAta[derivativeOrder][j] * a[r][j];
+    for (var m = 0; m < cols; m++) {
+      final weight = dWeights[m];
+      if (weight == 0) {
+        continue;
+      }
+      var inner = 0.0;
+      for (var l = 0; l < cols; l++) {
+        inner += invAta[m][l] * a[r][l];
+      }
+      value += weight * inner;
     }
-    coeff[r] = value * factorial;
+    coeff[r] = value;
   }
 
   _sgCoeffCache[cacheKey] = coeff;
@@ -274,15 +342,4 @@ List<List<double>> _invertMatrix(List<List<double>> matrix) {
   }
 
   return inv;
-}
-
-int _factorial(int n) {
-  if (n <= 1) {
-    return 1;
-  }
-  var out = 1;
-  for (var i = 2; i <= n; i++) {
-    out *= i;
-  }
-  return out;
 }

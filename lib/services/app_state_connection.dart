@@ -116,6 +116,12 @@ extension AppStateConnection on AppState {
       }
       throw lastError ?? Exception('Unable to connect');
     } catch (error) {
+      // Close any half-opened socket from the final failed attempt.
+      try {
+        await client.disconnect();
+      } catch (_) {
+        // Best-effort close only.
+      }
       statusMessage = 'Connection failed: $error';
       isConnected = false;
       showConnectScreen = true;
@@ -149,11 +155,13 @@ extension AppStateConnection on AppState {
     try {
       try {
         final board = await client.checkBoard(timeout: boardTimeout);
+        if (_disposed) return;
         statusMessage = board == 0 || board == 1
             ? 'Connected'
             : 'Connected (board status $board)';
         notifyUi();
       } catch (_) {
+        if (_disposed) return;
         statusMessage = 'Connected (verify timeout)';
         notifyUi();
         return;
@@ -161,6 +169,7 @@ extension AppStateConnection on AppState {
 
       try {
         final id = (await client.readModuleId(timeout: idTimeout)).trim();
+        if (_disposed) return;
         moduleId = id.isEmpty ? null : id;
         if (moduleId != null) {
           await dataStore.upsertDevice(
@@ -168,6 +177,7 @@ extension AppStateConnection on AppState {
             name: 'Si-NIR',
             ip: currentIp,
           );
+          if (_disposed) return;
           await _refreshKnownIps();
           _registerDiscoveredSensor(
             DiscoveredSensor(
@@ -180,11 +190,14 @@ extension AppStateConnection on AppState {
           );
         }
       } catch (_) {
+        if (_disposed) return;
         statusMessage = 'Connected (ID unavailable)';
       }
     } finally {
-      isVerifyingConnection = false;
-      notifyUi();
+      if (!_disposed) {
+        isVerifyingConnection = false;
+        notifyUi();
+      }
     }
   }
 
@@ -271,6 +284,13 @@ extension AppStateConnection on AppState {
       unawaited(mdnsFuture.then((ips) {
         if (ips.isEmpty) {
           _mdnsAvailable = false;
+          return;
+        }
+        // mDNS can resolve late; ignore if disposed, superseded, or connected.
+        if (_disposed ||
+            scanId != _discoveryRunId ||
+            isConnected ||
+            isConnecting) {
           return;
         }
         for (final ip in ips) {

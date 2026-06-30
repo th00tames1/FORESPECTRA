@@ -132,6 +132,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               state.updateAveragingMethod(value);
             },
           ),
+          if (state.averagingMethod == AveragingMethod.trimmedMean)
+            _trimDropField(context, state),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             value: state.continuousMode,
@@ -959,6 +961,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required double max,
     required ValueChanged<double> onChanged,
     String? valueLabel,
+    int divisions = 100,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -981,12 +984,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
             value: value,
             min: min,
             max: max,
-            divisions: 100,
+            divisions: divisions < 1 ? 1 : divisions,
             label: valueLabel ?? value.toStringAsFixed(0),
             onChanged: onChanged,
           ),
         ],
       ),
+    );
+  }
+
+  /// "Scans to drop" control for the Trim combine method. Trim needs at least
+  /// 3 scans (to keep 2 after dropping); below that, show a hint instead.
+  Widget _trimDropField(BuildContext context, AppState state) {
+    final maxDrop = state.targetScanCount - 2;
+    if (maxDrop < 1) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Text(
+          t('config.trimNeedsScans'),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+      );
+    }
+    final shown = state.trimDropCount.clamp(0, maxDrop);
+    return _sliderField(
+      context: context,
+      label: t('config.trimDropCount'),
+      value: shown.toDouble(),
+      min: 0,
+      max: maxDrop.toDouble(),
+      divisions: maxDrop,
+      valueLabel: '$shown',
+      onChanged: (v) => state.updateTrimDropCount(v.round()),
     );
   }
 }

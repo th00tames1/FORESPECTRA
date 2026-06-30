@@ -832,7 +832,8 @@ class CalibrationModel {
       intercept: (jsonMap['intercept'] as num).toDouble(),
       units: jsonMap['units'] as String? ?? '',
       label: jsonMap['label'] as String? ?? 'Result',
-      expectedLength: jsonMap['expectedLength'] as int? ?? coeffs.length,
+      expectedLength:
+          (jsonMap['expectedLength'] as num?)?.toInt() ?? coeffs.length,
       preprocessSteps: (jsonMap['preprocess'] as List<dynamic>? ?? [])
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList(),
@@ -897,11 +898,8 @@ class CalibrationModel {
     final modelType = (jsonMap['model_type'] as String? ?? 'linear').trim();
     final target = (jsonMap['target'] as String?)?.trim();
     final rawLabel = (jsonMap['label'] as String?)?.trim();
-    final axisUnit =
-        (jsonMap['axis_unit'] as String? ??
-                jsonMap['x_axis_unit'] as String? ??
-                '')
-            .trim();
+    final axisUnitRaw = jsonMap['axis_unit'] ?? jsonMap['x_axis_unit'];
+    final axisUnit = (axisUnitRaw is String ? axisUnitRaw : '').trim();
 
     GhNhConfig? ghNhConfig;
     final ghNhRaw = Map<String, dynamic>.from(

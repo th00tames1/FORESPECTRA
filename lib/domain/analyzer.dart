@@ -263,10 +263,12 @@ AnalysisResult runAnalysis(
         bestIdx = k;
       }
     }
-    final safeIdx = bestIdx.clamp(0, classes.isEmpty ? 0 : classes.length - 1);
-    final predictedLabel = classes.isEmpty
+    // bestIdx is always a valid head index; if a malformed model has more
+    // heads than declared classes, report the raw class number rather than
+    // clamping (which would silently relabel the winner as the last class).
+    final predictedLabel = (classes.isEmpty || bestIdx >= classes.length)
         ? 'Class $bestIdx'
-        : _humanizeClassLabel(classes[safeIdx]);
+        : _humanizeClassLabel(classes[bestIdx]);
     return AnalysisResult(
       modelId: model.id,
       modelName: model.name,
@@ -655,7 +657,13 @@ double interpolate(List<double> xs, List<double> ys, double x) {
   }
   for (var i = 0; i < xs.length - 1; i++) {
     if (x >= xs[i] && x <= xs[i + 1]) {
-      final t = (x - xs[i]) / (xs[i + 1] - xs[i]);
+      final span = xs[i + 1] - xs[i];
+      // Duplicate adjacent x would divide by zero and inject NaN into the
+      // resampled feature vector; fall back to the left sample instead.
+      if (span == 0) {
+        return ys[i];
+      }
+      final t = (x - xs[i]) / span;
       return ys[i] + t * (ys[i + 1] - ys[i]);
     }
   }

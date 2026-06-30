@@ -30,6 +30,7 @@ extension AppStateScanning on AppState {
     hasBackground = false;
     latestSpectrum = null;
     acquiredSpectra = const [];
+    droppedScanIndices = const [];
     manualBuffer = const [];
     latestAnalysisResults = const [];
     statusMessage = 'Disconnected';
@@ -121,6 +122,7 @@ extension AppStateScanning on AppState {
     stopScanRequested = false;
     currentScanIndex = 0;
     acquiredSpectra = const [];
+    droppedScanIndices = const [];
     manualBuffer = const [];
     final collected = <Spectrum>[];
     statusMessage = scanTotal == 1
@@ -156,6 +158,7 @@ extension AppStateScanning on AppState {
   /// and press Scan again for each spot.
   Future<void> _captureManualStep(int scanTotal) async {
     isScanning = true;
+    if (manualBuffer.isEmpty) droppedScanIndices = const [];
     final stepIndex = manualBuffer.length + 1;
     currentScanIndex = stepIndex;
     statusMessage = 'Scanning $stepIndex/$scanTotal...';
@@ -193,7 +196,11 @@ extension AppStateScanning on AppState {
     final n = collected.length;
     final combined = n == 1
         ? collected.first
-        : averageSpectra(collected, method: averagingMethod);
+        : averageSpectra(
+            collected,
+            method: averagingMethod,
+            trimDrop: trimDropCount,
+          );
     if (combined == null) {
       // Empty/malformed data: don't count the capture or open Results.
       acquiredSpectra = const [];
@@ -202,11 +209,40 @@ extension AppStateScanning on AppState {
     }
     acquiredSpectra = List.unmodifiable(collected);
     latestSpectrum = combined;
+    droppedScanIndices = (n > 1 && averagingMethod == AveragingMethod.trimmedMean)
+        ? trimmedMeanDroppedIndices(collected, trimDropCount)
+        : const [];
     _runSelectedModelAnalysis(notify: false);
+    final kept = n - droppedScanIndices.length;
     statusMessage = n == 1
         ? 'Ready to Scan'
-        : 'Captured $n scans (${averagingMethod.label})';
+        : droppedScanIndices.isEmpty
+            ? 'Captured $n scans (${averagingMethod.label})'
+            : 'Captured $n scans, averaged $kept (dropped ${droppedScanIndices.length})';
     captureCount += 1;
+  }
+
+  /// Re-derive the averaged spectrum, dropped-scan set, and analysis for the
+  /// already-captured scans using the current combine method + trim count.
+  /// Called when those settings change while a capture is still loaded, so the
+  /// preview / saved metadata never go stale relative to the method.
+  void recomputeCombine() {
+    final n = acquiredSpectra.length;
+    if (n <= 1) {
+      droppedScanIndices = const [];
+      return;
+    }
+    final combined = averageSpectra(
+      acquiredSpectra,
+      method: averagingMethod,
+      trimDrop: trimDropCount,
+    );
+    if (combined == null) return;
+    latestSpectrum = combined;
+    droppedScanIndices = averagingMethod == AveragingMethod.trimmedMean
+        ? trimmedMeanDroppedIndices(acquiredSpectra, trimDropCount)
+        : const [];
+    _runSelectedModelAnalysis(notify: false);
   }
 
   Future<void> _handleScanError(Object error) async {
@@ -325,6 +361,10 @@ extension AppStateScanning on AppState {
         'commonWavNum': scanParams.commonWavNum,
         'opticalGain': scanParams.opticalGain,
         'apodizationSel': scanParams.apodizationSel,
+        'scanCount': acquiredSpectra.length,
+        'combineMethod': averagingMethod.id,
+        // 1-based scan numbers the trimmed mean dropped (empty otherwise).
+        'droppedScans': [for (final i in droppedScanIndices) i + 1],
       }),
       materialName: materialName.trim().isEmpty ? null : materialName.trim(),
       sampleName: sampleName.trim().isEmpty ? null : sampleName.trim(),
@@ -383,6 +423,7 @@ extension AppStateScanning on AppState {
   void discardLatest() {
     latestSpectrum = null;
     acquiredSpectra = const [];
+    droppedScanIndices = const [];
     manualBuffer = const [];
     latestAnalysisResults = const [];
     statusMessage = 'Scan discarded';

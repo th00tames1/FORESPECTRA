@@ -123,7 +123,12 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   int targetScanCount = 1;
   AveragingMethod averagingMethod = AveragingMethod.mean;
+  // For the Trim combine method: how many of the most-deviant scans to drop.
+  int trimDropCount = 2;
   List<Spectrum> acquiredSpectra = const [];
+  // Zero-based indices into [acquiredSpectra] that the trimmed-mean dropped as
+  // outliers (empty for mean/median or single-scan captures).
+  List<int> droppedScanIndices = const [];
   int currentScanIndex = 0;
 
   // Continuous mode ON  -> one Scan tap auto-captures all [targetScanCount]

@@ -26,7 +26,6 @@ class ScanParams {
   List<int> generalData;
 
   Uint8List toBytes() {
-    final data = ByteData(192);
     final fields = [
       operation,
       resolution,
@@ -38,6 +37,10 @@ class ScanParams {
       apodizationSel,
       ...generalData,
     ];
+    // Size from the actual field count (48 == 192 bytes for the default
+    // 40-entry generalData) so a differently-sized generalData can never write
+    // past the buffer.
+    final data = ByteData(fields.length * 4);
     for (var i = 0; i < fields.length; i++) {
       data.setUint32(i * 4, fields[i], Endian.little);
     }
@@ -76,20 +79,33 @@ class SpectrumPayload {
 }
 
 SpectrumPayload parseSpectrumPayload(Uint8List payload) {
+  if (payload.length < 8) {
+    throw Exception('Truncated spectrum payload');
+  }
   final data = ByteData.sublistView(payload);
   final status = data.getUint32(0, Endian.little);
   if (status != 0) {
     throw Exception('Device returned status $status');
   }
   final length = data.getUint32(4, Endian.little);
-  final offset = 8;
-  final psdBytes = payload.sublist(offset, offset + maxPsdLength * 8);
-  final wvlBytes = payload.sublist(offset + maxPsdLength * 8);
+  const offset = 8;
+  final psdRegion = maxPsdLength * 8;
+  if (payload.length < offset + psdRegion) {
+    throw Exception('Truncated spectrum payload');
+  }
+  final psdBytes = payload.sublist(offset, offset + psdRegion);
+  final wvlBytes = payload.sublist(offset + psdRegion);
   final psdData = ByteData.sublistView(psdBytes);
   final wvlData = ByteData.sublistView(wvlBytes);
-  final values = Float64List(length);
-  final wavenumber = Float64List(length);
-  for (var i = 0; i < length; i++) {
+  // Clamp to what the payload actually carries so a malformed length or a
+  // short wavelength region can never index out of bounds.
+  final wvlCapacity = wvlBytes.lengthInBytes ~/ 8;
+  var n = length;
+  if (n > maxPsdLength) n = maxPsdLength;
+  if (n > wvlCapacity) n = wvlCapacity;
+  final values = Float64List(n);
+  final wavenumber = Float64List(n);
+  for (var i = 0; i < n; i++) {
     values[i] = psdData.getInt64(i * 8, Endian.little) * psdScale;
     wavenumber[i] = wvlData.getInt64(i * 8, Endian.little) * wavenumberScale;
   }

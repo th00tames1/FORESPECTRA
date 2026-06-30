@@ -307,6 +307,9 @@ class DataStore {
       'spectra',
       where: 'measurement_id = ?',
       whereArgs: [measurementId],
+      // SQLite gives no row order without ORDER BY; sort by kind so 'raw' comes
+      // first and the individual 'scan_01','scan_02',... stay in scan order.
+      orderBy: 'kind',
     );
     return rows.map(_spectrumBlobFromRow).toList();
   }

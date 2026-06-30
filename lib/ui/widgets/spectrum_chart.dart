@@ -16,7 +16,9 @@ class SpectrumChart extends StatefulWidget {
     this.maxY = 1.0,
     this.simplified = false,
     this.overlays = const [],
+    this.droppedOverlays = const <int>{},
     this.overlayLegendLabel,
+    this.droppedLegendLabel,
     this.mainLegendLabel,
   });
 
@@ -32,9 +34,14 @@ class SpectrumChart extends StatefulWidget {
   /// scan) underneath the bold main/averaged trace.
   final List<Spectrum> overlays;
 
+  /// Indices into [overlays] that were dropped as outliers (e.g. by the trimmed
+  /// mean). Drawn as a distinct red dashed trace.
+  final Set<int> droppedOverlays;
+
   /// When set together with [mainLegendLabel] and at least one overlay, a small
   /// legend is drawn under the title identifying the overlay vs main traces.
   final String? overlayLegendLabel;
+  final String? droppedLegendLabel;
   final String? mainLegendLabel;
 
   @override
@@ -58,6 +65,7 @@ class _SpectrumChartState extends State<SpectrumChart> {
         oldWidget.maxPoints != widget.maxPoints ||
         oldWidget.minY != widget.minY ||
         oldWidget.maxY != widget.maxY ||
+        oldWidget.simplified != widget.simplified ||
         !identical(oldWidget.overlays, widget.overlays) ||
         oldWidget.overlays.length != widget.overlays.length) {
       _dataFuture = _buildData();
@@ -67,9 +75,12 @@ class _SpectrumChartState extends State<SpectrumChart> {
   @override
   Widget build(BuildContext context) {
     final overlayLineColor = AppTheme.muted.withValues(alpha: 0.55);
+    final droppedColor = const Color(0xFFD0021B).withValues(alpha: 0.75);
     final showLegend = widget.overlays.isNotEmpty &&
         widget.overlayLegendLabel != null &&
         widget.mainLegendLabel != null;
+    final showDroppedLegend = widget.droppedOverlays.isNotEmpty &&
+        widget.droppedLegendLabel != null;
     return Card(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(2, 14, 2, 10),
@@ -89,7 +100,9 @@ class _SpectrumChartState extends State<SpectrumChart> {
             if (showLegend) ...[
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Row(
+                child: Wrap(
+                  spacing: 14,
+                  runSpacing: 4,
                   children: [
                     _legendSwatch(
                       context,
@@ -97,7 +110,13 @@ class _SpectrumChartState extends State<SpectrumChart> {
                       label: widget.overlayLegendLabel!,
                       thickness: 1.5,
                     ),
-                    const SizedBox(width: 16),
+                    if (showDroppedLegend)
+                      _legendSwatch(
+                        context,
+                        color: droppedColor,
+                        label: widget.droppedLegendLabel!,
+                        thickness: 1.5,
+                      ),
                     _legendSwatch(
                       context,
                       color: AppTheme.accent,
@@ -119,17 +138,21 @@ class _SpectrumChartState extends State<SpectrumChart> {
                       _ChartData(main: [const FlSpot(0, 0)], overlays: const []);
                   final enableTouch = !widget.simplified;
                   final xInterval = _computeXInterval(data.main);
-                  final overlayBars = [
-                    for (final spots in data.overlays)
+                  final overlayBars = <LineChartBarData>[];
+                  for (var idx = 0; idx < data.overlays.length; idx++) {
+                    final isDropped = widget.droppedOverlays.contains(idx);
+                    overlayBars.add(
                       LineChartBarData(
-                        spots: spots,
+                        spots: data.overlays[idx],
                         isCurved: false,
-                        barWidth: 1.1,
+                        barWidth: isDropped ? 1.4 : 1.1,
+                        dashArray: isDropped ? const [5, 3] : null,
                         dotData: FlDotData(show: false),
-                        color: overlayLineColor,
+                        color: isDropped ? droppedColor : overlayLineColor,
                         belowBarData: BarAreaData(show: false),
                       ),
-                  ];
+                    );
+                  }
                   return LineChart(
                     LineChartData(
                       minY: widget.minY,
@@ -413,25 +436,52 @@ List<double> _downsamplePairs(Map<String, Object> args) {
   final length = x.length < y.length ? x.length : y.length;
   final stride = (length / maxPoints).ceil().clamp(1, length);
   final pairs = <double>[];
-  var dn = 1;
-  for (var i = 0; i < length; i += stride) {
-    final double xv;
-    if (axisUnit == 'DN') {
-      xv = dn.toDouble();
-    } else if (axisUnit == 'cm^-1') {
-      xv = x[i];
-    } else if (axisUnit == 'nm') {
+
+  double axisValue(int i, int dn) {
+    if (axisUnit == 'DN') return dn.toDouble();
+    if (axisUnit == 'cm^-1') return x[i];
+    if (axisUnit == 'nm') {
       final raw = x[i];
-      xv = raw <= 0 ? 0 : 10000000.0 / raw;
-    } else {
-      xv = x[i];
+      return raw <= 0 ? 0 : 10000000.0 / raw;
     }
-    final yv = y[i];
-    dn += 1;
-    // Skip non-finite samples; fl_chart throws on NaN/Inf spots.
-    if (!xv.isFinite || !yv.isFinite) continue;
+    return x[i];
+  }
+
+  // Skip non-finite samples; fl_chart throws on NaN/Inf spots.
+  void emit(double xv, double yv) {
+    if (!xv.isFinite || !yv.isFinite) return;
     pairs.add(xv);
     pairs.add(yv);
+  }
+
+  // No decimation (or the ordinal DN view): keep every sampled point as-is.
+  if (stride == 1 || axisUnit == 'DN') {
+    var dn = 1;
+    for (var i = 0; i < length; i += stride) {
+      emit(axisValue(i, dn), y[i]);
+      dn += 1;
+    }
+    return pairs;
+  }
+
+  // Decimating a real wavelength axis: within each stride bucket keep BOTH the
+  // min-y and max-y sample (in index order) instead of a single point, so a
+  // narrow absorption peak/valley is not silently dropped. The caller re-sorts
+  // the main trace by x, so the within-bucket emission order is irrelevant.
+  for (var b = 0; b < length; b += stride) {
+    final end = (b + stride < length) ? b + stride : length;
+    var minIdx = b;
+    var maxIdx = b;
+    for (var i = b + 1; i < end; i++) {
+      if (y[i] < y[minIdx]) minIdx = i;
+      if (y[i] > y[maxIdx]) maxIdx = i;
+    }
+    final lo = minIdx <= maxIdx ? minIdx : maxIdx;
+    final hi = minIdx <= maxIdx ? maxIdx : minIdx;
+    emit(axisValue(lo, 0), y[lo]);
+    if (hi != lo) {
+      emit(axisValue(hi, 0), y[hi]);
+    }
   }
   return pairs;
 }

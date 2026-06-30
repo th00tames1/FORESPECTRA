@@ -161,11 +161,22 @@ class SiNirClient {
     return _readPacket(readTimeout: readTimeout ?? _defaultReadTimeout);
   }
 
+  // Largest plausible response body: status + length + PSD + wavelength
+  // regions (see parseSpectrumPayload). A malformed/garbage length must not
+  // make _readExact accumulate without bound.
+  static const int _maxPacketLength = 8 + maxPsdLength * 16;
+
   Future<Uint8List> _readPacket({required Duration readTimeout}) async {
     final lengthBytes = await _readExact(4, readTimeout: readTimeout);
     final length = ByteData.sublistView(lengthBytes).getUint32(0, Endian.little);
     if (length == 0) {
       return Uint8List(0);
+    }
+    if (length > _maxPacketLength) {
+      // A bad length almost always means the stream framing has desynced;
+      // drop the buffer so the next request starts clean.
+      _readCache.clear();
+      throw Exception('Implausible packet length $length');
     }
     return _readExact(length, readTimeout: readTimeout);
   }
@@ -175,9 +186,17 @@ class SiNirClient {
     if (queue == null) {
       throw Exception('Read queue not initialized');
     }
-    while (_readCache.length < length) {
-      final chunk = await queue.next.timeout(readTimeout);
-      _readCache.addAll(chunk);
+    try {
+      while (_readCache.length < length) {
+        final chunk = await queue.next.timeout(readTimeout);
+        _readCache.addAll(chunk);
+      }
+    } catch (_) {
+      // A timeout or EOF mid-packet leaves a partial frame in the cache; if it
+      // is not cleared, the next read parses leftover bytes as a length prefix
+      // and every subsequent response is mis-framed. Drop it and rethrow.
+      _readCache.clear();
+      rethrow;
     }
     final data = Uint8List.fromList(_readCache.sublist(0, length));
     _readCache.removeRange(0, length);

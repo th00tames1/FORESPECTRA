@@ -30,13 +30,29 @@ class _HistoryScreenState extends State<HistoryScreen> {
   String _query = '';
   String? _expandedId;
   _HistorySort _sort = _HistorySort.dateDesc;
+  late Future<List<Measurement>> _measurementsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _measurementsFuture = context.read<AppState>().dataStore.listMeasurements();
+  }
+
+  // Re-run the list query only after a mutation (rename/delete); plain Consumer
+  // rebuilds keep reusing the cached future so the list does not flicker.
+  void _reloadMeasurements() {
+    setState(() {
+      _measurementsFuture =
+          context.read<AppState>().dataStore.listMeasurements();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, state, _) {
         return FutureBuilder<List<Measurement>>(
-          future: state.dataStore.listMeasurements(),
+          future: _measurementsFuture,
           builder: (context, snapshot) {
             final items = snapshot.data ?? [];
             final filtered = items.where((item) {
@@ -223,6 +239,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                                     dataStore: state.dataStore,
                                                     axisUnit:
                                                         state.spectrumAxisUnit,
+                                                    paramsJson: item.paramsJson,
                                                   ),
                                                 ],
                                               ),
@@ -442,8 +459,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Future<String> _exportCsv(List<Measurement> items) async {
     final dataStore = context.read<AppState>().dataStore;
     final prepared = <Map<String, Object?>>[];
-    var maxBands = 0;
-    var referenceBands = <double>[];
+    // Shared wavelength axis across every exported row, keyed by the same
+    // 3-decimal string used in the header so a given column always maps to the
+    // same wavelength even when measurements use different band grids.
+    final unionWavelengths = <String, double>{};
     final analysisColumns = <String, _CsvAnalysisColumn>{};
 
     for (final item in items) {
@@ -551,7 +570,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       final spectra = await dataStore.getSpectra(item.id);
       final blob = _pickPreferredSpectrum(spectra);
       final spectrum = blob?.toSpectrum();
-      final pairs = <List<double>>[];
+      final reflectanceByWl = <String, double>{};
       if (spectrum != null && blob != null) {
         final bandCount = math.min(
           blob.length,
@@ -566,27 +585,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
           if (!reflectance.isFinite) {
             continue;
           }
-          pairs.add([wavelengthNm, reflectance]);
+          final key = wavelengthNm.toStringAsFixed(3);
+          reflectanceByWl[key] = reflectance;
+          unionWavelengths[key] = wavelengthNm;
         }
-        pairs.sort((a, b) => a[0].compareTo(b[0]));
-      }
-      final wavelengths = pairs.map((e) => e[0]).toList(growable: false);
-      final reflectances = pairs.map((e) => e[1]).toList(growable: false);
-      final bandCount = wavelengths.length;
-      if (bandCount > maxBands) {
-        maxBands = bandCount;
-        referenceBands = wavelengths;
       }
       prepared.add({
         'item': item,
         'analyses': analyses,
         'sampleType': _sampleType(blob),
         'commonWave': _commonWaveLabel(item.paramsJson),
-        'wavelengths': wavelengths,
-        'reflectances': reflectances,
-        'bandCount': bandCount,
+        'combine': _combineInfo(item.paramsJson),
+        'reflectanceByWl': reflectanceByWl,
       });
     }
+
+    // Sort the shared axis numerically; every header band column and every row
+    // band cell are emitted in this exact order.
+    final bandKeys = unionWavelengths.keys.toList()
+      ..sort((a, b) => unionWavelengths[a]!.compareTo(unionWavelengths[b]!));
 
     final header = <String>[
       'Sample Type',
@@ -596,6 +613,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
       'Created At (UTC)',
       'Scan Time',
       'Common Wave Number',
+      'Combine Method',
+      'Scans Total',
+      'Scans Used',
+      'Dropped Scans',
       'Latitude',
       'Longitude',
       'Analysis Summary',
@@ -603,18 +624,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
     for (final column in analysisColumns.values) {
       header.add(column.header);
     }
-    for (var i = 0; i < maxBands; i += 1) {
-      if (i < referenceBands.length) {
-        header.add(referenceBands[i].toStringAsFixed(3));
-      } else {
-        header.add('');
-      }
+    for (final key in bandKeys) {
+      header.add(key);
     }
     final fileName =
         'history_export_${DateTime.now().millisecondsSinceEpoch}.csv';
     final docsDir = await getApplicationDocumentsDirectory();
     final filePath = p.join(docsDir.path, fileName);
-    final sink = File(filePath).openWrite();
+    final file = File(filePath);
+    final sink = file.openWrite();
     try {
       // UTF-8 BOM so Excel/Sheets auto-detect encoding and don't mangle
       // non-ASCII characters (Korean material names, em-dashes, etc.).
@@ -626,8 +644,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
         final summary = _analysisSummary(analyses);
         final sampleType = entry['sampleType'] as String? ?? 'Spectrum';
         final commonWave = entry['commonWave'] as String? ?? '';
-        final reflectances = entry['reflectances'] as List<double>;
-        final bandCount = entry['bandCount'] as int;
+        final combine =
+            entry['combine'] as ({String method, String total, String used, String dropped})?;
+
+        final reflectanceByWl =
+            entry['reflectanceByWl'] as Map<String, double>;
 
         final values = <String>[
           sampleType,
@@ -637,6 +658,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
           _formatUtc(item.timestamp),
           _formatScanTimeSeconds(item.scanTimeMs),
           commonWave,
+          combine?.method ?? '',
+          combine?.total ?? '',
+          combine?.used ?? '',
+          combine?.dropped ?? '',
           item.latitude?.toString() ?? '',
           item.longitude?.toString() ?? '',
           summary,
@@ -646,16 +671,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
           values.add(_analysisValueForColumn(analyses, column.key));
         }
 
-        for (var i = 0; i < maxBands; i += 1) {
-          values.add(
-            i < bandCount ? reflectances[i].toStringAsFixed(6) : '',
-          );
+        for (final key in bandKeys) {
+          final reflectance = reflectanceByWl[key];
+          values.add(reflectance == null ? '' : reflectance.toStringAsFixed(6));
         }
 
         sink.writeln(values.map(_csv).join(','));
       }
-    } finally {
       await sink.close();
+    } catch (_) {
+      // Don't leave a half-written CSV behind on a mid-export failure.
+      try {
+        await sink.close();
+      } catch (_) {}
+      try {
+        await file.delete();
+      } catch (_) {}
+      rethrow;
     }
     return filePath;
   }
@@ -758,6 +790,46 @@ class _HistoryScreenState extends State<HistoryScreen> {
       return 'Background';
     }
     return blob.kind;
+  }
+
+  /// Combine-method summary for CSV: method label, scan counts, and the
+  /// 1-based numbers of scans the trimmed mean dropped (space-separated).
+  ({String method, String total, String used, String dropped}) _combineInfo(
+    String paramsJson,
+  ) {
+    try {
+      final map = jsonDecode(paramsJson);
+      if (map is Map) {
+        final total = (map['scanCount'] as num?)?.toInt();
+        final droppedList = (map['droppedScans'] is List)
+            ? (map['droppedScans'] as List)
+                  .whereType<num>()
+                  .map((e) => e.toInt())
+                  .toList()
+            : <int>[];
+        final used = total == null ? null : total - droppedList.length;
+        return (
+          method: _combineMethodLabel((map['combineMethod'] as String?) ?? ''),
+          total: total?.toString() ?? '',
+          used: used?.toString() ?? '',
+          dropped: droppedList.isEmpty ? '' : droppedList.join(' '),
+        );
+      }
+    } catch (_) {}
+    return (method: '', total: '', used: '', dropped: '');
+  }
+
+  String _combineMethodLabel(String id) {
+    switch (id) {
+      case 'median':
+        return 'Median';
+      case 'trimmed_mean':
+        return 'Trimmed mean';
+      case 'mean':
+        return 'Mean';
+      default:
+        return id;
+    }
   }
 
   String _commonWaveLabel(String paramsJson) {
@@ -912,7 +984,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     if (!mounted) {
       return;
     }
-    setState(() {});
+    _reloadMeasurements();
   }
 
   Future<void> _deleteItem(Measurement item) async {
@@ -943,11 +1015,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
     if (!mounted) {
       return;
     }
-    setState(() {
-      if (_expandedId == item.id) {
-        _expandedId = null;
-      }
-    });
+    if (_expandedId == item.id) {
+      _expandedId = null;
+    }
+    _reloadMeasurements();
   }
 }
 
@@ -1362,11 +1433,13 @@ class _HistorySpectrumPreview extends StatefulWidget {
     required this.measurementId,
     required this.dataStore,
     required this.axisUnit,
+    required this.paramsJson,
   });
 
   final String measurementId;
   final DataStore dataStore;
   final String axisUnit;
+  final String paramsJson;
 
   @override
   State<_HistorySpectrumPreview> createState() =>
@@ -1382,11 +1455,29 @@ class _HistorySpectrumPreviewState extends State<_HistorySpectrumPreview> {
     _future = _load();
   }
 
+  // 1-based scan numbers the trimmed mean dropped, from the saved params.
+  Set<int> _droppedScanNumbers() {
+    try {
+      final map = jsonDecode(widget.paramsJson);
+      if (map is Map && map['droppedScans'] is List) {
+        return {
+          for (final v in (map['droppedScans'] as List))
+            if (v is num) v.toInt(),
+        };
+      }
+    } catch (_) {}
+    return const {};
+  }
+
   Future<_PreviewData> _load() async {
     try {
       final blobs = await widget.dataStore.getSpectra(widget.measurementId);
       if (blobs.isEmpty) {
-        return const _PreviewData(main: null, overlays: <Spectrum>[]);
+        return const _PreviewData(
+          main: null,
+          overlays: <Spectrum>[],
+          dropped: <int>{},
+        );
       }
       SpectrumBlob? raw;
       final scans = <SpectrumBlob>[];
@@ -1399,13 +1490,30 @@ class _HistorySpectrumPreviewState extends State<_HistorySpectrumPreview> {
       }
       final mainBlob = raw ?? blobs.first;
       scans.sort((a, b) => a.kind.compareTo(b.kind));
+      // Map each overlay position to the dropped flag via its 'scan_NN' number.
+      final droppedNumbers = _droppedScanNumbers();
+      final dropped = <int>{};
+      for (var i = 0; i < scans.length; i++) {
+        final n = _scanNumber(scans[i].kind);
+        if (n != null && droppedNumbers.contains(n)) dropped.add(i);
+      }
       return _PreviewData(
         main: mainBlob.toSpectrum(),
         overlays: [for (final s in scans) s.toSpectrum()],
+        dropped: dropped,
       );
     } catch (_) {
-      return const _PreviewData(main: null, overlays: <Spectrum>[]);
+      return const _PreviewData(
+        main: null,
+        overlays: <Spectrum>[],
+        dropped: <int>{},
+      );
     }
+  }
+
+  int? _scanNumber(String kind) {
+    final match = RegExp(r'(\d+)').firstMatch(kind);
+    return match == null ? null : int.tryParse(match.group(1)!);
   }
 
   @override
@@ -1430,12 +1538,22 @@ class _HistorySpectrumPreviewState extends State<_HistorySpectrumPreview> {
         if (main == null || main.length == 0) {
           return const SizedBox.shrink();
         }
+        final dropped = data!.dropped;
+        final hasDropped = dropped.isNotEmpty && data.overlays.isNotEmpty;
+        // Legend is shown only when there are dropped scans to explain.
         return SpectrumChart(
           spectrum: main,
           title: '',
           axisUnit: widget.axisUnit,
           simplified: true,
-          overlays: data!.overlays,
+          overlays: data.overlays,
+          droppedOverlays: hasDropped ? dropped : const <int>{},
+          overlayLegendLabel: hasDropped
+              ? '${t('results.legendUsed')} (${data.overlays.length - dropped.length})'
+              : null,
+          droppedLegendLabel:
+              hasDropped ? '${t('results.legendDropped')} (${dropped.length})' : null,
+          mainLegendLabel: hasDropped ? t('results.legendAverage') : null,
         );
       },
     );
@@ -1443,8 +1561,13 @@ class _HistorySpectrumPreviewState extends State<_HistorySpectrumPreview> {
 }
 
 class _PreviewData {
-  const _PreviewData({required this.main, required this.overlays});
+  const _PreviewData({
+    required this.main,
+    required this.overlays,
+    required this.dropped,
+  });
 
   final Spectrum? main;
   final List<Spectrum> overlays;
+  final Set<int> dropped;
 }

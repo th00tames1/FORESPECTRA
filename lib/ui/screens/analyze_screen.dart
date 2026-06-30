@@ -63,6 +63,9 @@ class _AnalyzeScreenState extends State<AnalyzeScreen> {
 
               final acquired = state.acquiredSpectra;
               final hasMultiple = acquired.length > 1;
+              final dropped = state.droppedScanIndices.toSet();
+              final hasDropped = hasMultiple && dropped.isNotEmpty;
+              final kept = acquired.length - dropped.length;
               final middleSection = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -73,8 +76,14 @@ class _AnalyzeScreenState extends State<AnalyzeScreen> {
                         : t('results.spectrumPreview'),
                     axisUnit: state.spectrumAxisUnit,
                     overlays: hasMultiple ? acquired : const [],
+                    droppedOverlays: hasDropped ? dropped : const <int>{},
                     overlayLegendLabel: hasMultiple
-                        ? '${t('results.legendIndividual')} (${acquired.length})'
+                        ? (hasDropped
+                            ? '${t('results.legendUsed')} ($kept)'
+                            : '${t('results.legendIndividual')} (${acquired.length})')
+                        : null,
+                    droppedLegendLabel: hasDropped
+                        ? '${t('results.legendDropped')} (${dropped.length})'
                         : null,
                     mainLegendLabel:
                         hasMultiple ? t('results.legendAverage') : null,

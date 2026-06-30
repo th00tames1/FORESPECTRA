@@ -126,6 +126,8 @@ const Map<String, String> _en = {
   'results.averagedSpectrum': 'Averaged spectrum',
   'results.scans': 'scans',
   'results.legendIndividual': 'Individual scans',
+  'results.legendUsed': 'Used',
+  'results.legendDropped': 'Dropped',
   'results.legendAverage': 'Average',
   'results.confirmSave': 'Confirm Save',
   'results.analysis': 'Analysis',
@@ -214,6 +216,8 @@ const Map<String, String> _en = {
   'config.capture': 'Capture',
   'config.scansPerCapture': 'Scans per capture',
   'config.combineMethod': 'Combine method',
+  'config.trimDropCount': 'Scans to drop',
+  'config.trimNeedsScans': 'Trim needs 3 or more scans per capture.',
   'config.continuousMode': 'Continuous capture',
   'config.continuousModeSubtitle':
       'On: one Scan press auto-captures all scans back-to-back (as fast as the '
@@ -372,6 +376,8 @@ const Map<String, String> _ko = {
   'results.averagedSpectrum': '평균 스펙트럼',
   'results.scans': '회 측정',
   'results.legendIndividual': '개별 측정',
+  'results.legendUsed': '사용',
+  'results.legendDropped': '제외',
   'results.legendAverage': '평균',
   'results.confirmSave': '저장 확인',
   'results.analysis': '분석',
@@ -457,6 +463,8 @@ const Map<String, String> _ko = {
   'config.capture': '캡처',
   'config.scansPerCapture': '캡처당 측정 횟수',
   'config.combineMethod': '평균 방식',
+  'config.trimDropCount': '버릴 스캔 수',
+  'config.trimNeedsScans': 'Trim은 캡처당 측정 횟수가 3 이상이어야 합니다.',
   'config.continuousMode': '연속 자동 측정',
   'config.continuousModeSubtitle':
       '켜짐: 측정 한 번으로 모든 스캔을 연속 자동 취득(센서 속도만큼 빠르게). '
