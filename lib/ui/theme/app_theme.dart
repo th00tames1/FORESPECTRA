@@ -5,6 +5,9 @@ class AppTheme {
   // Brand
   static const _osuOrange = Color(0xFFD73F09);
   static const _osuOrangePressed = Color(0xFFB13407);
+  // Lifted accent for small text/icons on dark surfaces; fills stay _osuOrange.
+  static const _osuOrangeBright = Color(0xFFF0602A);
+  static const _successBright = Color(0xFF34C173);
 
   // Light (Notion-inspired)
   static const _canvasLight = Color(0xFFFFFFFF);
@@ -41,16 +44,18 @@ class AppTheme {
     final base = ThemeData.light();
     final bodyTheme = GoogleFonts.interTextTheme(base.textTheme);
     final titleTheme = GoogleFonts.interTextTheme(base.textTheme);
+    // Type C (Trailhead voice): heavy headlines, w700 titles/labels. Same
+    // Inter family - google_fonts loads the extra weights automatically.
     final textTheme = bodyTheme.copyWith(
-      displayLarge: titleTheme.displayLarge?.copyWith(fontWeight: FontWeight.w600, letterSpacing: -1.2),
-      displayMedium: titleTheme.displayMedium?.copyWith(fontWeight: FontWeight.w600, letterSpacing: -0.8),
-      displaySmall: titleTheme.displaySmall?.copyWith(fontWeight: FontWeight.w600, letterSpacing: -0.5),
-      headlineLarge: titleTheme.headlineLarge?.copyWith(fontWeight: FontWeight.w600, letterSpacing: -0.5),
-      headlineMedium: titleTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w600, letterSpacing: -0.3),
-      headlineSmall: titleTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
-      titleLarge: titleTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
-      titleMedium: titleTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-      titleSmall: titleTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+      displayLarge: titleTheme.displayLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -1.2),
+      displayMedium: titleTheme.displayMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.8),
+      displaySmall: titleTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.6),
+      headlineLarge: titleTheme.headlineLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.6),
+      headlineMedium: titleTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.6),
+      headlineSmall: titleTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+      titleLarge: titleTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+      titleMedium: titleTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+      titleSmall: titleTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
     );
     final colorScheme = ColorScheme.light(
       primary: _osuOrange,
@@ -116,7 +121,11 @@ class AppTheme {
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: _osuOrange, width: 1.5),
         ),
-        labelStyle: textTheme.bodySmall?.copyWith(color: _slateLight),
+        labelStyle: textTheme.bodySmall?.copyWith(
+          color: _slateLight,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.8,
+        ),
         hintStyle: textTheme.bodyMedium?.copyWith(color: _stoneLight),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -126,7 +135,7 @@ class AppTheme {
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-          textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+          textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -135,13 +144,13 @@ class AppTheme {
           side: const BorderSide(color: _hairlineStrongLight),
           foregroundColor: _inkLight,
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-          textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w500),
+          textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: _osuOrange,
-          textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w500),
+          textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
         ),
       ),
       chipTheme: ChipThemeData(
@@ -181,14 +190,15 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         indicatorColor: _osuOrange.withValues(alpha: 0.12),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
-          final base = textTheme.labelSmall;
+          // One step larger than labelSmall so tab names read at a glance.
+          final base = textTheme.labelMedium;
           if (states.contains(WidgetState.disabled)) {
             return base?.copyWith(color: _stoneLight);
           }
           if (states.contains(WidgetState.selected)) {
-            return base?.copyWith(color: _osuOrange, fontWeight: FontWeight.w600);
+            return base?.copyWith(color: _osuOrange, fontWeight: FontWeight.w700);
           }
-          return base?.copyWith(color: _slateLight);
+          return base?.copyWith(color: _slateLight, fontWeight: FontWeight.w500);
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.disabled)) {
@@ -225,16 +235,18 @@ class AppTheme {
     final base = ThemeData.dark();
     final bodyTheme = GoogleFonts.interTextTheme(base.textTheme);
     final titleTheme = GoogleFonts.interTextTheme(base.textTheme);
+    // Type C (Trailhead voice): heavy headlines, w700 titles/labels. Same
+    // Inter family - google_fonts loads the extra weights automatically.
     final textTheme = bodyTheme.copyWith(
-      displayLarge: titleTheme.displayLarge?.copyWith(fontWeight: FontWeight.w600, letterSpacing: -1.2),
-      displayMedium: titleTheme.displayMedium?.copyWith(fontWeight: FontWeight.w600, letterSpacing: -0.8),
-      displaySmall: titleTheme.displaySmall?.copyWith(fontWeight: FontWeight.w600, letterSpacing: -0.5),
-      headlineLarge: titleTheme.headlineLarge?.copyWith(fontWeight: FontWeight.w600, letterSpacing: -0.5),
-      headlineMedium: titleTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w600, letterSpacing: -0.3),
-      headlineSmall: titleTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
-      titleLarge: titleTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
-      titleMedium: titleTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-      titleSmall: titleTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+      displayLarge: titleTheme.displayLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -1.2),
+      displayMedium: titleTheme.displayMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.8),
+      displaySmall: titleTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.6),
+      headlineLarge: titleTheme.headlineLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.6),
+      headlineMedium: titleTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.6),
+      headlineSmall: titleTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+      titleLarge: titleTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+      titleMedium: titleTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+      titleSmall: titleTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
     );
     final colorScheme = ColorScheme.dark(
       primary: _osuOrange,
@@ -298,7 +310,11 @@ class AppTheme {
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: _osuOrange, width: 1.5),
         ),
-        labelStyle: textTheme.bodySmall?.copyWith(color: _slateDark),
+        labelStyle: textTheme.bodySmall?.copyWith(
+          color: _slateDark,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.8,
+        ),
         hintStyle: textTheme.bodyMedium?.copyWith(color: _slateDark),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -308,7 +324,7 @@ class AppTheme {
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-          textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+          textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -317,13 +333,13 @@ class AppTheme {
           side: const BorderSide(color: _hairlineDark),
           foregroundColor: _inkDark,
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-          textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w500),
+          textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: _osuOrange,
-          textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w500),
+          foregroundColor: _osuOrangeBright,
+          textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
         ),
       ),
       chipTheme: ChipThemeData(
@@ -359,21 +375,27 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         indicatorColor: _osuOrange.withValues(alpha: 0.16),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
-          final base = textTheme.labelSmall;
+          // One step larger than labelSmall so tab names read at a glance.
+          final base = textTheme.labelMedium;
           if (states.contains(WidgetState.disabled)) {
             return base?.copyWith(color: _slateDark);
           }
           if (states.contains(WidgetState.selected)) {
-            return base?.copyWith(color: _osuOrange, fontWeight: FontWeight.w600);
+            // Brightened accent: base orange is ~3.5:1 on the dark canvas,
+            // below the 4.5:1 small-text contrast floor.
+            return base?.copyWith(
+              color: _osuOrangeBright,
+              fontWeight: FontWeight.w700,
+            );
           }
-          return base?.copyWith(color: _slateDark);
+          return base?.copyWith(color: _slateDark, fontWeight: FontWeight.w500);
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.disabled)) {
             return IconThemeData(color: _slateDark);
           }
           if (states.contains(WidgetState.selected)) {
-            return const IconThemeData(color: _osuOrange);
+            return const IconThemeData(color: _osuOrangeBright);
           }
           return IconThemeData(color: _slateDark);
         }),
@@ -422,4 +444,12 @@ class AppTheme {
   static Color get muted => _slateLight;
   static Color get ink => _inkLight;
   static Color get lightMuted => _stoneLight;
+
+  // Brightness-aware text/icon colors: the base accent and success greens sit
+  // below the 4.5:1 small-text contrast floor on dark surfaces, so text-level
+  // uses get a lifted variant while fills keep the brand values.
+  static Color accentTextOn(Brightness brightness) =>
+      brightness == Brightness.dark ? _osuOrangeBright : _osuOrange;
+  static Color successTextOn(Brightness brightness) =>
+      brightness == Brightness.dark ? _successBright : _success;
 }

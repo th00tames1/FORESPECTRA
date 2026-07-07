@@ -105,15 +105,32 @@ class _ConnectScreenState extends State<ConnectScreen> {
                                         color: isOnline ? AppTheme.success : AppTheme.muted,
                                       ),
                                       const SizedBox(height: 12),
-                                      Text(
-                                        title,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              letterSpacing: 1.2,
-                                              color: isOnline ? AppTheme.success : null,
-                                            ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 20,
+                                        ),
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          child: Text(
+                                            title,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleMedium
+                                                ?.copyWith(
+                                                  // Match the SCAN action label:
+                                                  // 19px, w600, wide tracking.
+                                                  fontSize: 19,
+                                                  fontWeight: FontWeight.w600,
+                                                  letterSpacing: 3,
+                                                  color: isOnline
+                                                      ? AppTheme.successTextOn(
+                                                          Theme.of(context)
+                                                              .brightness,
+                                                        )
+                                                      : null,
+                                                ),
+                                          ),
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -141,10 +158,12 @@ class _ConnectScreenState extends State<ConnectScreen> {
                                             vertical: 10,
                                           ),
                                           decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(999),
-                                            color: AppTheme.success.withValues(alpha: 0.14),
+                                            // Card-shaped (r14) per Direction A
+                                            // instead of a stadium pill.
+                                            borderRadius: BorderRadius.circular(14),
+                                            color: AppTheme.success.withValues(alpha: 0.12),
                                             border: Border.all(
-                                              color: AppTheme.success.withValues(alpha: 0.55),
+                                              color: AppTheme.success.withValues(alpha: 0.45),
                                             ),
                                           ),
                                           child: Column(
@@ -156,7 +175,9 @@ class _ConnectScreenState extends State<ConnectScreen> {
                                                   Icon(
                                                     Icons.check_circle,
                                                     size: 16,
-                                                    color: AppTheme.success,
+                                                    color: AppTheme.successTextOn(
+                                                      Theme.of(context).brightness,
+                                                    ),
                                                   ),
                                                   const SizedBox(width: 6),
                                                   Text(
@@ -164,7 +185,11 @@ class _ConnectScreenState extends State<ConnectScreen> {
                                                     style: Theme.of(context)
                                                         .textTheme
                                                         .labelLarge
-                                                        ?.copyWith(color: AppTheme.success),
+                                                        ?.copyWith(
+                                                          color: AppTheme.successTextOn(
+                                                            Theme.of(context).brightness,
+                                                          ),
+                                                        ),
                                                   ),
                                                 ],
                                               ),

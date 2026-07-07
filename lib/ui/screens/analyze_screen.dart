@@ -5,6 +5,7 @@ import '../../domain/analyzer.dart';
 import '../../domain/averaging.dart';
 import '../../services/app_state.dart';
 import '../../services/i18n.dart';
+import '../widgets/diag_pill.dart';
 import '../widgets/spectrum_chart.dart';
 
 class AnalyzeScreen extends StatefulWidget {
@@ -323,24 +324,64 @@ class _AnalysisSummaryCard extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodySmall,
               )
             else
-              ...results.map((result) {
-                final diagnostics = showDiagnostics
-                    ? result.diagnosticsSummary
-                    : '';
-                final text = diagnostics.isEmpty
-                    ? '${result.label}: ${result.displayValue}'
-                    : '${result.label}: ${result.displayValue} ($diagnostics)';
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Text(
-                    text,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                );
-              }),
+              for (var i = 0; i < results.length; i++) ...[
+                if (i > 0) const Divider(height: 16),
+                _resultRow(context, results[i]),
+              ],
           ],
         ),
       ),
+    );
+  }
+
+  /// One model's outcome: name left, value right (bold), diagnostics as
+  /// tinted pills underneath instead of a parenthesized text blob.
+  Widget _resultRow(BuildContext context, AnalysisResult result) {
+    final theme = Theme.of(context);
+    final pills = <Widget>[];
+    void addPill(String label, String? valueText, String? level) {
+      if (valueText == null) {
+        return;
+      }
+      pills.add(DiagPill(text: '$label $valueText', level: level));
+    }
+
+    if (showDiagnostics) {
+      addPill(result.ghLabel, result.ghDisplayValue, result.ghLevel);
+      addPill(result.nhLabel, result.nhDisplayValue, result.nhLevel);
+      addPill(result.fossGhLabel, result.fossGhDisplayValue, result.fossGhLevel);
+      addPill(result.fossNhLabel, result.fossNhDisplayValue, result.fossNhLevel);
+      addPill(result.fossQLabel, result.fossQDisplayValue, result.fossQLevel);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Expanded(
+              child: Text(result.label, style: theme.textTheme.bodyMedium),
+            ),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                result.displayValue,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+                textAlign: TextAlign.right,
+              ),
+            ),
+          ],
+        ),
+        if (pills.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Wrap(spacing: 6, runSpacing: 4, children: pills),
+          ),
+      ],
     );
   }
 }

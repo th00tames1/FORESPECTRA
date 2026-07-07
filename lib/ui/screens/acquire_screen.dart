@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../domain/averaging.dart';
 import '../../services/app_state.dart';
 import '../../services/i18n.dart';
 import 'analyze_screen.dart';
 import '../theme/app_theme.dart';
+import '../widgets/conn_chip.dart';
+import '../widgets/session_card.dart';
 
 class AcquireScreen extends StatefulWidget {
   const AcquireScreen({super.key});
@@ -149,36 +152,55 @@ class _AcquireScreenState extends State<AcquireScreen> {
     final topSection = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(t('scan.title'), style: Theme.of(context).textTheme.headlineMedium),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                t('scan.title'),
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+            ),
+            ConnChip(connected: state.isConnected, testMode: state.testMode),
+          ],
+        ),
         if (state.testMode && !state.isConnected) ...[
           const SizedBox(height: 12),
           _TestModeBanner(onExit: state.exitTestMode),
         ],
         const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: (state.isConnected || state.testMode) && !isBusy
-                ? state.runBackground
-                : null,
-            icon: const Icon(Icons.layers),
-            label: Text(
-              state.hasBackground
-                  ? (state.referenceAgeLabel != null
-                        ? '${t('scan.referenceSet')} (${state.referenceAgeLabel})'
-                        : t('scan.referenceSet'))
-                  : t('scan.setReference'),
+        SessionCard(
+          rows: [
+            SessionRow(
+              icon: Icons.layers_outlined,
+              label: t('scan.reference'),
+              value: state.hasBackground
+                  ? t('scan.refSet')
+                  : t('scan.referenceNotSet'),
+              valueDetail:
+                  state.hasBackground && state.referenceAgeLabel != null
+                      ? '· ${state.referenceAgeLabel}'
+                      : null,
+              enabled: (state.isConnected || state.testMode) && !isBusy,
+              onTap: state.runBackground,
             ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () => _showModelQuickSheet(context, state),
-            icon: const Icon(Icons.psychology_alt_outlined),
-            label: Text(_modelButtonLabel(state)),
-          ),
+            SessionRow(
+              icon: Icons.psychology_alt_outlined,
+              label: t('scan.analysisModels'),
+              value: _modelRowValue(state),
+              chevron: true,
+              onTap: () => _showModelQuickSheet(context, state),
+            ),
+            SessionRow(
+              icon: Icons.repeat,
+              label: t('config.scansPerCapture'),
+              value: '${state.targetScanCount}',
+              valueDetail: state.targetScanCount > 1
+                  ? '· ${state.averagingMethod.label}'
+                  : null,
+              chevron: true,
+              onTap: () => state.setTab(3),
+            ),
+          ],
         ),
       ],
     );
@@ -237,19 +259,29 @@ class _AcquireScreenState extends State<AcquireScreen> {
                         color: canCapture ? Colors.white : AppTheme.muted,
                       ),
                       const SizedBox(height: 10),
-                      Text(
-                        state.isScanning
-                            ? (canStopScan
-                                ? '${t('scan.stop')} ${state.currentScanIndex}/${state.targetScanCount}'
-                                : (state.targetScanCount > 1
-                                    ? '${state.currentScanIndex}/${state.targetScanCount}'
-                                    : t('scan.scanning')))
-                            : (manualActive
-                                ? '${t('scan.scan')} ${state.manualBuffer.length + 1}/${state.targetScanCount}'
-                                : t('scan.scan')),
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          letterSpacing: 1.2,
-                          color: canCapture ? Colors.white : null,
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            state.isScanning
+                                ? (canStopScan
+                                    ? '${t('scan.stop')} ${state.currentScanIndex}/${state.targetScanCount}'
+                                    : (state.targetScanCount > 1
+                                        ? '${state.currentScanIndex}/${state.targetScanCount}'
+                                        : t('scan.scanning')))
+                                : (manualActive
+                                    ? '${t('scan.scan')} ${state.manualBuffer.length + 1}/${state.targetScanCount}'
+                                    : t('scan.scan')),
+                            // Action label: larger than titleMedium but kept at
+                            // w600 so the wide tracking stays airy, not heavy.
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 3,
+                              color: canCapture ? Colors.white : null,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -284,7 +316,8 @@ class _AcquireScreenState extends State<AcquireScreen> {
                 textInputAction: TextInputAction.next,
                 enabled: state.hasBackground,
                 decoration: InputDecoration(
-                  labelText: t('scan.material'),
+                  // Uppercase specimen-label voice (no-op for Korean).
+                  labelText: t('scan.material').toUpperCase(),
                   hintText: t('scan.materialHint'),
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -301,7 +334,7 @@ class _AcquireScreenState extends State<AcquireScreen> {
                 focusNode: _sampleFocus,
                 enabled: state.hasBackground && !state.batchModeEnabled,
                 decoration: InputDecoration(
-                  labelText: t('scan.sample'),
+                  labelText: t('scan.sample').toUpperCase(),
                   hintText: state.batchModeEnabled
                       ? t('scan.sampleAuto')
                       : t('scan.sampleHint'),
@@ -407,15 +440,17 @@ class _AcquireScreenState extends State<AcquireScreen> {
     await _openResultsScreen(context);
   }
 
-  String _modelButtonLabel(AppState state) {
-    final n = state.selectedModels.length;
-    if (n == 0) {
-      return '${t('scan.analysisModels')}: ${t('scan.modelNoneSelected')}';
+  /// Compact value for the session-card Models row: nothing selected, the
+  /// model label(s) when they fit, otherwise a count.
+  String _modelRowValue(AppState state) {
+    final selected = state.selectedModels;
+    if (selected.isEmpty) {
+      return t('scan.modelNoneSelected');
     }
-    if (n == 1) {
-      return '${t('scan.analysisModel')}: ${state.selectedModels.first.name}';
+    if (selected.length <= 2) {
+      return selected.map((m) => m.label).join(', ');
     }
-    return '${t('scan.analysisModels')}: $n ${t('scan.modelSelectedSuffix')}';
+    return '${selected.length} ${t('scan.modelSelectedSuffix')}';
   }
 
   /// Lightweight per-scan model toggle. Full details (algorithm, metrics,

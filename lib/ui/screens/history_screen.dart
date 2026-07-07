@@ -189,45 +189,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                                     CrossAxisAlignment.start,
                                                 children: [
                                                   const Divider(height: 12),
-                                                  Text('${t('history.scan')} ${item.id}'),
-                                                  const SizedBox(height: 6),
-                                                  Text(
-                                                    '${t('history.device')}: ${item.deviceId}',
-                                                  ),
-                                                  if (item.materialName != null)
-                                                    Text(
-                                                      '${t('history.material')}: ${item.materialName}',
-                                                    ),
-                                                  if (item.sampleName != null)
-                                                    Text(
-                                                      '${t('history.sample')}: ${item.sampleName}',
-                                                    ),
-                                                  Text(
-                                                    '${t('history.timestamp')}: ${item.timestamp}',
-                                                  ),
-                                                  Text(
-                                                    '${t('history.scanTime')}: ${item.scanTimeMs} ms',
-                                                  ),
-                                                  if (analyses.isNotEmpty) ...[
-                                                    const SizedBox(height: 8),
-                                                    Text(
-                                                      t('history.analysis'),
-                                                      style: Theme.of(
-                                                        context,
-                                                      ).textTheme.labelLarge,
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    ...analyses.map((analysis) {
-                                                      final diagnostics = analysis
-                                                          .diagnosticsSummary;
-                                                      final text =
-                                                          diagnostics.isEmpty
-                                                          ? '${analysis.label}: ${analysis.displayValue}'
-                                                          : '${analysis.label}: ${analysis.displayValue} ($diagnostics)';
-                                                      return Text(text);
-                                                    }),
-                                                  ],
-                                                  const SizedBox(height: 12),
+                                                  // Direction A order: preview
+                                                  // first, then the analysis
+                                                  // values, then one meta line.
                                                   // Loaded only when this row is
                                                   // expanded, so the list stays
                                                   // light; collapsing disposes it.
@@ -240,6 +204,80 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                                     axisUnit:
                                                         state.spectrumAxisUnit,
                                                     paramsJson: item.paramsJson,
+                                                  ),
+                                                  if (analyses.isNotEmpty) ...[
+                                                    const SizedBox(height: 10),
+                                                    Wrap(
+                                                      spacing: 14,
+                                                      runSpacing: 2,
+                                                      children: [
+                                                        for (final analysis
+                                                            in analyses)
+                                                          Text.rich(
+                                                            TextSpan(
+                                                              children: [
+                                                                TextSpan(
+                                                                  text:
+                                                                      '${analysis.label}: ',
+                                                                ),
+                                                                TextSpan(
+                                                                  text: analysis
+                                                                      .displayValue,
+                                                                  style: const TextStyle(
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w700,
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                            style: Theme.of(
+                                                              context,
+                                                            )
+                                                                .textTheme
+                                                                .bodyMedium,
+                                                          ),
+                                                      ],
+                                                    ),
+                                                    for (final analysis
+                                                        in analyses)
+                                                      if (analysis
+                                                          .diagnosticsSummary
+                                                          .isNotEmpty)
+                                                        Padding(
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .only(top: 3),
+                                                          child: Text(
+                                                            '${analysis.label} — ${analysis.diagnosticsSummary}',
+                                                            style: Theme.of(
+                                                              context,
+                                                            )
+                                                                .textTheme
+                                                                .bodySmall
+                                                                ?.copyWith(
+                                                                  color: Theme.of(
+                                                                    context,
+                                                                  )
+                                                                      .colorScheme
+                                                                      .onSurfaceVariant,
+                                                                ),
+                                                          ),
+                                                        ),
+                                                  ],
+                                                  const SizedBox(height: 8),
+                                                  Text(
+                                                    _expandedMetaLine(item),
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .bodySmall
+                                                        ?.copyWith(
+                                                          color: Theme.of(
+                                                            context,
+                                                          )
+                                                              .colorScheme
+                                                              .onSurfaceVariant,
+                                                        ),
                                                   ),
                                                 ],
                                               ),
@@ -769,6 +807,26 @@ class _HistoryScreenState extends State<HistoryScreen> {
   String _formatUtc(DateTime timestamp) {
     final utc = timestamp.toUtc();
     return DateFormat('d MMM yyyy, h:mm a').format(utc);
+  }
+
+  /// Single muted meta line for the expanded card: device, scan time, and the
+  /// multi-scan combine summary when the capture averaged several scans.
+  String _expandedMetaLine(Measurement item) {
+    final parts = <String>[
+      '${t('history.device')} ${item.deviceId}',
+      '${t('history.scanTime')} ${_formatScanTimeSeconds(item.scanTimeMs)} s',
+    ];
+    final combine = _combineInfo(item.paramsJson);
+    if (combine.total.isNotEmpty) {
+      final droppedCount = combine.dropped.isEmpty
+          ? 0
+          : combine.dropped.split(' ').length;
+      final suffix = droppedCount > 0
+          ? '${combine.method}, $droppedCount ${t('results.legendDropped').toLowerCase()}'
+          : combine.method;
+      parts.add('${combine.total} ${t('results.scans')} ($suffix)');
+    }
+    return parts.join(' · ');
   }
 
   String _formatScanTimeSeconds(int scanTimeMs) {
