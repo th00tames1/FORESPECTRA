@@ -180,6 +180,9 @@ class _AcquireScreenState extends State<AcquireScreen> {
                   state.hasBackground && state.referenceAgeLabel != null
                       ? '· ${state.referenceAgeLabel}'
                       : null,
+              // Missing reference blocks scanning - flag it in red instead of
+              // explaining it in a sentence.
+              alert: !state.hasBackground,
               enabled: (state.isConnected || state.testMode) && !isBusy,
               onTap: state.runBackground,
             ),
@@ -273,12 +276,12 @@ class _AcquireScreenState extends State<AcquireScreen> {
                                 : (manualActive
                                     ? '${t('scan.scan')} ${state.manualBuffer.length + 1}/${state.targetScanCount}'
                                     : t('scan.scan')),
-                            // Action label: larger than titleMedium but kept at
-                            // w600 so the wide tracking stays airy, not heavy.
+                            // Action label: larger than titleMedium, kept at
+                            // w600 with moderate tracking.
                             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                               fontSize: 19,
                               fontWeight: FontWeight.w600,
-                              letterSpacing: 3,
+                              letterSpacing: 1.8,
                               color: canCapture ? Colors.white : null,
                             ),
                           ),
@@ -316,12 +319,16 @@ class _AcquireScreenState extends State<AcquireScreen> {
                 textInputAction: TextInputAction.next,
                 enabled: state.hasBackground,
                 decoration: InputDecoration(
-                  // Uppercase specimen-label voice (no-op for Korean).
+                  // Uppercase specimen-label voice (no-op for Korean). Label
+                  // stays small on the border; the example hint fills the
+                  // empty field instead of a full-size floating label.
                   labelText: t('scan.material').toUpperCase(),
                   hintText: t('scan.materialHint'),
+                  floatingLabelBehavior: FloatingLabelBehavior.always,
+                  isDense: true,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12,
-                    vertical: 8,
+                    vertical: 9,
                   ),
                 ),
                 onChanged: state.updateMaterialName,
@@ -338,9 +345,11 @@ class _AcquireScreenState extends State<AcquireScreen> {
                   hintText: state.batchModeEnabled
                       ? t('scan.sampleAuto')
                       : t('scan.sampleHint'),
+                  floatingLabelBehavior: FloatingLabelBehavior.always,
+                  isDense: true,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12,
-                    vertical: 8,
+                    vertical: 9,
                   ),
                 ),
                 onChanged: state.updateSampleName,
@@ -351,13 +360,20 @@ class _AcquireScreenState extends State<AcquireScreen> {
         const SizedBox(height: 8),
         Row(
           children: [
-            Switch(
-              value: state.batchModeEnabled,
-              onChanged: state.hasBackground
-                  ? (v) => _toggleBatchMode(context, state, v)
-                  : null,
+            // Compact switch: the M3 default reads oversized next to the
+            // dense fields above.
+            Transform.scale(
+              scale: 0.8,
+              alignment: Alignment.centerLeft,
+              child: Switch(
+                value: state.batchModeEnabled,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                onChanged: state.hasBackground
+                    ? (v) => _toggleBatchMode(context, state, v)
+                    : null,
+              ),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 6),
             Text(
               t('scan.batchMode'),
               style: Theme.of(context).textTheme.bodyMedium,

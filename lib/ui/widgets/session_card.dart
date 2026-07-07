@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 /// One row of the Scan screen's session card: leading icon + label on the
 /// left, current value on the right (bold part + muted detail), optional
 /// chevron for rows that navigate.
@@ -12,6 +14,7 @@ class SessionRow {
     this.chevron = false,
     this.onTap,
     this.enabled = true,
+    this.alert = false,
   });
 
   final IconData icon;
@@ -21,6 +24,10 @@ class SessionRow {
   final bool chevron;
   final VoidCallback? onTap;
   final bool enabled;
+
+  /// Action required: tints the icon and value red so a missing prerequisite
+  /// (e.g. no reference) reads at a glance instead of as a long sentence.
+  final bool alert;
 }
 
 /// Direction A session card: groups the pre-scan checklist (reference, models,
@@ -34,6 +41,7 @@ class SessionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final slate = theme.colorScheme.onSurfaceVariant;
+    final danger = AppTheme.dangerTextOn(theme.brightness);
     final children = <Widget>[];
     for (var i = 0; i < rows.length; i++) {
       if (i > 0) {
@@ -49,7 +57,7 @@ class SessionCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               child: Row(
                 children: [
-                  Icon(row.icon, size: 18, color: slate),
+                  Icon(row.icon, size: 18, color: row.alert ? danger : slate),
                   const SizedBox(width: 10),
                   Text(row.label, style: theme.textTheme.bodyMedium),
                   const SizedBox(width: 12),
@@ -61,6 +69,7 @@ class SessionCard extends StatelessWidget {
                             text: row.value,
                             style: theme.textTheme.bodyMedium?.copyWith(
                               fontWeight: FontWeight.w700,
+                              color: row.alert ? danger : null,
                             ),
                           ),
                           if (row.valueDetail != null)

@@ -452,4 +452,8 @@ class AppTheme {
       brightness == Brightness.dark ? _osuOrangeBright : _osuOrange;
   static Color successTextOn(Brightness brightness) =>
       brightness == Brightness.dark ? _successBright : _success;
+  static Color dangerTextOn(Brightness brightness) =>
+      brightness == Brightness.dark
+          ? const Color(0xFFE25A46)
+          : const Color(0xFFC02A1C);
 }

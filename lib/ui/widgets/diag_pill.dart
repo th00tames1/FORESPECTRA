@@ -22,9 +22,7 @@ class DiagPill extends StatelessWidget {
     final Color tone;
     switch (level) {
       case AnalysisResult.levelOutlier:
-        tone = brightness == Brightness.dark
-            ? const Color(0xFFE25A46)
-            : const Color(0xFFC02A1C);
+        tone = AppTheme.dangerTextOn(brightness);
         break;
       case AnalysisResult.levelWarning:
         tone = AppTheme.warning;

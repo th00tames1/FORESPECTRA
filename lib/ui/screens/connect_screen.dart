@@ -118,10 +118,10 @@ class _ConnectScreenState extends State<ConnectScreen> {
                                                 .titleMedium
                                                 ?.copyWith(
                                                   // Match the SCAN action label:
-                                                  // 19px, w600, wide tracking.
+                                                  // 19px, w600, moderate tracking.
                                                   fontSize: 19,
                                                   fontWeight: FontWeight.w600,
-                                                  letterSpacing: 3,
+                                                  letterSpacing: 1.8,
                                                   color: isOnline
                                                       ? AppTheme.successTextOn(
                                                           Theme.of(context)
